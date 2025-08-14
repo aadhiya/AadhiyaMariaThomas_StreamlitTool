@@ -100,6 +100,62 @@ if show_profiling:
                             st.markdown("### ❗ Missing Data Summary")
                             missing_counts = {col: int(df[col].null_count()) for col in df.columns}
                             st.table(missing_counts)
+                            st.markdown("#### 🛠 Handle Missing Values")
+
+                            # Let the user choose a column or "All numeric columns"
+                            target_col = st.selectbox(
+                                "Select a column to clean:",
+                                ["All numeric columns"] + list(df.columns)
+                            )
+
+                            method = st.radio(
+                                "Choose a method:",
+                                ["Fill with Mean", "Fill with Median", "Fill with Mode", "Drop Rows", "Drop Column"]
+                            )
+
+                            if st.button("Apply Missing Value Handling"):
+                                if method == "Drop Column":
+                                    if target_col == "All numeric columns":
+                                        st.warning("Please select a specific column to drop.")
+                                    else:
+                                        df = df.drop(target_col)
+                                elif method == "Drop Rows":
+                                    if target_col == "All numeric columns":
+                                        df = df.drop_nulls()
+                                    else:
+                                        df = df.drop_nulls(subset=[target_col])
+                                else:
+                                    import statistics
+                                    if target_col == "All numeric columns":
+                                        num_cols = [c for c,t in zip(df.columns, df.dtypes) if "int" in str(t) or "float" in str(t)]
+                                        for c in num_cols:
+                                            if method == "Fill with Mean":
+                                                df = df.with_columns(pl.col(c).fill_null(df[c].mean()))
+                                            elif method == "Fill with Median":
+                                                df = df.with_columns(pl.col(c).fill_null(df[c].median()))
+                                            elif method == "Fill with Mode":
+                                                mode_val = df[c].drop_nulls().mode()[0]
+                                                df = df.with_columns(pl.col(c).fill_null(mode_val))
+                                    else:
+                                        if method == "Fill with Mean":
+                                            df = df.with_columns(pl.col(target_col).fill_null(df[target_col].mean()))
+                                        elif method == "Fill with Median":
+                                            df = df.with_columns(pl.col(target_col).fill_null(df[target_col].median()))
+                                        elif method == "Fill with Mode":
+                                            mode_val = df[target_col].drop_nulls().mode()[0]
+                                            df = df.with_columns(pl.col(target_col).fill_null(mode_val))
+
+                                st.success("✅ Missing value handling applied!")
+                                # Optionally show updated preview
+                                st.dataframe(df.head())
+
+# ===== Duplicate Handling =====
+            st.markdown("### 🌀 Remove Duplicates")
+            if st.button("Remove Duplicate Rows"):
+                before = df.height
+                df = df.unique()
+                after = df.height
+                st.success(f"✅ Removed {before - after} duplicate rows.")
 
 # Interactive Column Explorer
             if show_column_explorer:
