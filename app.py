@@ -53,15 +53,15 @@ if uploaded_file is not None:
 #st.subheader("Data Profiling")
 # ========= SIDEBAR =========
 st.sidebar.header("Options")
-show_profiling = st.sidebar.checkbox("🔍 Show Data Profiling")
+show_profiling = st.sidebar.checkbox(" Show Data Profiling")
 if show_profiling:
         try:
-            st.sidebar.subheader("📊 Profiling Sections")
+            st.sidebar.subheader(" Profiling Sections")
             show_numeric = st.sidebar.checkbox("Numeric Summary", value=True)
             show_categorical = st.sidebar.checkbox("Categorical Summary", value=True)
             show_missing = st.sidebar.checkbox("Missing Data Summary", value=True)
             show_column_explorer = st.sidebar.checkbox("Interactive Column Explorer", value=True)
-
+            show_column_explanation = st.sidebar.checkbox("Column Explanation", value=False)
             st.markdown("---")
             st.subheader("📈 Data Profiling Results") 
                
@@ -85,41 +85,92 @@ if show_profiling:
                     st.info("No numeric columns found.")
 
 # Categorical Summary
-                if show_categorical:            
-                                st.markdown("### 🏷 Categorical Columns Summary")
-                                categorical_cols = [col for col, dtype in zip(df.columns, df.dtypes) if dtype == pl.Utf8]
-                                if categorical_cols:
-                                    for col in categorical_cols:
-                                        counts_df = df.select(pl.col(col).value_counts().sort( descending=True)).to_pandas()
-                                        with st.expander(f"📦 Value counts for {col}"):
-                                            st.dataframe(counts_df)
-                                else:
-                                    st.info("No categorical columns found.")
- # Missing Data Summary
-                if show_missing:
-                                st.markdown("### ❗ Missing Data Summary")
-                                missing_counts = {col: int(df[col].null_count()) for col in df.columns}
-                                st.table(missing_counts)
+            if show_categorical:            
+                            st.markdown("### 🏷 Categorical Columns Summary")
+                            categorical_cols = [col for col, dtype in zip(df.columns, df.dtypes) if dtype == pl.Utf8]
+                            if categorical_cols:
+                                for col in categorical_cols:
+                                    counts_df = df.select(pl.col(col).value_counts().sort( descending=True)).to_pandas()
+                                    with st.expander(f"📦 Value counts for {col}"):
+                                        st.dataframe(counts_df)
+                            else:
+                                st.info("No categorical columns found.")
+# Missing Data Summary
+            if show_missing:
+                            st.markdown("### ❗ Missing Data Summary")
+                            missing_counts = {col: int(df[col].null_count()) for col in df.columns}
+                            st.table(missing_counts)
 
-                # Interactive Column Explorer
-                if show_column_explorer:
-                                st.markdown("### 🔍 Interactive Column Explorer")
-                                col_to_explore = st.selectbox("Select a column to explore:", df.columns)
-                                col_dtype = df[col_to_explore].dtype
+# Interactive Column Explorer
+            if show_column_explorer:
+                            st.markdown("### 🔍 Interactive Column Explorer")
+                            col_to_explore = st.selectbox("Select a column to explore:", df.columns)
+                            col_dtype = df[col_to_explore].dtype
 
-                                if col_dtype in [pl.Int64, pl.Float64, pl.Float32, pl.Int32]:
-                                    series = df[col_to_explore].to_pandas()
-                                    fig, ax = plt.subplots()
-                                    ax.hist(series.dropna(), bins=30, color="skyblue")
-                                    ax.set_title(f"Histogram of {col_to_explore}")
-                                    st.pyplot(fig)
-                                elif col_dtype == pl.Utf8:
-                                    counts = df.select(pl.col(col_to_explore).value_counts().sort("counts", descending=True)).to_pandas()
-                                    fig, ax = plt.subplots()
-                                    ax.bar(counts[col_to_explore], counts["counts"])
-                                    plt.xticks(rotation=45, ha='right')
-                                    st.pyplot(fig)
+                            if col_dtype in [pl.Int64, pl.Float64, pl.Float32, pl.Int32]:
+                                series = df[col_to_explore].to_pandas()
+                                fig, ax = plt.subplots()
+                                ax.hist(series.dropna(), bins=30, color="skyblue")
+                                ax.set_title(f"Histogram of {col_to_explore}")
+                                st.pyplot(fig)
+                            elif col_dtype == pl.Utf8:
+                                counts = df.select(pl.col(col_to_explore).value_counts().sort("counts", descending=True)).to_pandas()
+                                fig, ax = plt.subplots()
+                                ax.bar(counts[col_to_explore], counts["counts"])
+                                plt.xticks(rotation=45, ha='right')
+                                st.pyplot(fig)
+#column explanation
+            if show_column_explanation:
+                st.sidebar.markdown("---")
+                st.sidebar.write("Optional: Upload a column description CSV")
+                col_desc_file = st.sidebar.file_uploader(
+                    "Upload Column Descriptions", 
+                    type=["csv"],
+                    key="col_desc"
+                )
 
+                st.markdown("###  Column Explanation")
+                if col_desc_file is not None:
+                    try:
+                        try:
+                            desc_df = pd.read_csv(col_desc_file, encoding='utf-8')
+                        except UnicodeDecodeError:
+                            desc_df = pd.read_csv(col_desc_file, encoding='latin1')
+
+                        # Normalize column names (strip and lowercase)
+                        desc_df.columns = [c.strip() for c in desc_df.columns]
+
+                        # If file uses "Row" instead of "Column", rename it
+                        if 'Row' in desc_df.columns and 'Column' not in desc_df.columns:
+                            desc_df.rename(columns={'Row': 'Column'}, inplace=True)
+
+                        required_cols = {"Column", "Description"}
+                        if not required_cols.issubset(desc_df.columns):
+                            st.error(f"Description file must contain columns: {required_cols}")
+                        else:
+                            desc_df = desc_df[desc_df["Column"].isin(df.columns)]
+                            st.dataframe(desc_df, use_container_width=True)
+                    except Exception as e:
+                        st.error(f"Error reading column description file: {e}")
+                else:
+                    # Fallback to auto-generated descriptions
+                    explanations = []
+                    for col, dtype in zip(df.columns, df.dtypes):
+                        dtype_str = str(dtype)
+                        sample_val = df[col].drop_nulls().head(1).to_list()
+                        sample_text = f" e.g., '{sample_val[0]}'" if sample_val else ""
+                        missing_count = int(df[col].null_count())
+
+                        if "int" in dtype_str or "float" in dtype_str:
+                            explanation = f"'{col}' is a numeric column containing numbers{sample_text} with {missing_count} missing values."
+                        elif "str" in dtype_str or "Utf8" in dtype_str:
+                            explanation = f"'{col}' is a text/categorical column{sample_text} with {missing_count} missing values."
+                        else:
+                            explanation = f"'{col}' is of type {dtype_str}{sample_text} with {missing_count} missing values."
+
+                        explanations.append({"Column": col, "Description": explanation})
+
+                    st.dataframe(pd.DataFrame(explanations))
         except Exception as e:
                     st.error(f"Error during data profiling: {e}")
 
