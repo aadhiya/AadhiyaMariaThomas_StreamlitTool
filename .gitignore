@@ -1,0 +1,38 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*$py.class
+
+# ---- Virtual Environment ----
+venv/
+env/
+
+# ---- Environment & Config Files ----
+*.env
+.env.*
+
+# ---- Data files (optional) ----
+*.csv
+*.xlsx
+*.xls
+*.parquet
+*.feather
+
+# ---- Output / Generated Files ----
+*.log
+*.html
+*.pdf
+
+# ---- Jupyter Notebook ----
+.ipynb_checkpoints/
+
+# ---- OS / Editor Specific ----
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# ---- Build / Packaging ----
+build/
+dist/
+*.egg-info/
