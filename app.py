@@ -45,95 +45,84 @@ if uploaded_file is not None:
     except Exception as e:
         st.warning(f"Warning: Could not load file. Details: {e}")
 
-else:
-    st.info("👆 Please upload a CSV or Excel file.")
 
-#Descriptive stats for numeric columns
-def numeric_profile(df):
-    numeric_cols = [col for col, dtype in zip(df.columns, df.dtypes) if dtype in [pl.Int64, pl.Float64, pl.Float32, pl.Int32]]
-    if not numeric_cols:
-        return None
-
-    stats_df = df.select([
-        pl.col(c).mean().alias(f'{c}_mean') for c in numeric_cols
-    ] + [
-        pl.col(c).median().alias(f'{c}_median') for c in numeric_cols
-    ] + [
-        pl.col(c).std().alias(f'{c}_std') for c in numeric_cols
-    ] + [
-        pl.col(c).min().alias(f'{c}_min') for c in numeric_cols
-    ] + [
-        pl.col(c).max().alias(f'{c}_max') for c in numeric_cols
-    ] + [
-        pl.col(c).is_null().sum().alias(f'{c}_missing') for c in numeric_cols
-    ])
-
-    return stats_df.to_pandas()
-
-#Provide counts/distributions for categorical columns
-def categorical_profile(df):
-    categorical_cols = [col for col, dtype in zip(df.columns, df.dtypes) if dtype == pl.Utf8]
-    summary = {}
-    for col in categorical_cols:
-        count_df = df.select([
-            pl.col(col).value_counts().sort(descending=True)
-        ]).to_pandas()
-        summary[col] = count_df
-    return summary
-
-#missing data summary
-def missing_data_summary(df):
-    missing_counts = {col: df[col].null_count() for col in df.columns}
-    return missing_counts
 
 
 # Assuming df is a Polars DataFrame loaded after upload
 
-st.subheader("Data Profiling")
+#st.subheader("Data Profiling")
+# ========= SIDEBAR =========
+st.sidebar.header("Options")
+show_profiling = st.sidebar.checkbox("🔍 Show Data Profiling")
+if show_profiling:
+        try:
+            st.sidebar.subheader("📊 Profiling Sections")
+            show_numeric = st.sidebar.checkbox("Numeric Summary", value=True)
+            show_categorical = st.sidebar.checkbox("Categorical Summary", value=True)
+            show_missing = st.sidebar.checkbox("Missing Data Summary", value=True)
+            show_column_explorer = st.sidebar.checkbox("Interactive Column Explorer", value=True)
 
+            st.markdown("---")
+            st.subheader("📈 Data Profiling Results") 
+               
 # Numeric summary
-numeric_stats = numeric_profile(df)
-if numeric_stats is not None:
-    st.write("### Numeric Columns Summary")
-    st.dataframe(numeric_stats)
 
-# Categorical summary
-cat_summary = categorical_profile(df)
-st.write("### Categorical Columns Summary")
-for col, counts in cat_summary.items():
-    with st.expander(f"Value counts for {col}"):
-        st.dataframe(counts)
+            if show_numeric:
+                numeric_cols = [col for col, dtype in zip(df.columns, df.dtypes) 
+                                if dtype in [pl.Int64, pl.Float64, pl.Float32, pl.Int32]]
+                if numeric_cols:
+                    st.markdown("### 📌 Numeric Columns Summary")
+                    stats_df = df.select(
+                        [pl.col(c).mean().alias(f"{c}_mean") for c in numeric_cols] +
+                        [pl.col(c).median().alias(f"{c}_median") for c in numeric_cols] +
+                        [pl.col(c).std().alias(f"{c}_std") for c in numeric_cols] +
+                        [pl.col(c).min().alias(f"{c}_min") for c in numeric_cols] +
+                        [pl.col(c).max().alias(f"{c}_max") for c in numeric_cols] +
+                        [pl.col(c).is_null().sum().alias(f"{c}_missing") for c in numeric_cols]
+                    ).to_pandas()
+                    st.dataframe(stats_df, use_container_width=True)
+                else:
+                    st.info("No numeric columns found.")
 
-# Missing data
-missing_summary = missing_data_summary(df)
-st.write("### Missing Data Summary")
-st.table(missing_summary)
+# Categorical Summary
+                if show_categorical:            
+                                st.markdown("### 🏷 Categorical Columns Summary")
+                                categorical_cols = [col for col, dtype in zip(df.columns, df.dtypes) if dtype == pl.Utf8]
+                                if categorical_cols:
+                                    for col in categorical_cols:
+                                        counts_df = df.select(pl.col(col).value_counts().sort( descending=True)).to_pandas()
+                                        with st.expander(f"📦 Value counts for {col}"):
+                                            st.dataframe(counts_df)
+                                else:
+                                    st.info("No categorical columns found.")
+ # Missing Data Summary
+                if show_missing:
+                                st.markdown("### ❗ Missing Data Summary")
+                                missing_counts = {col: int(df[col].null_count()) for col in df.columns}
+                                st.table(missing_counts)
 
-# Interactive column explorer
-col_to_explore = st.selectbox("Select a column to explore:", df.columns)
+                # Interactive Column Explorer
+                if show_column_explorer:
+                                st.markdown("### 🔍 Interactive Column Explorer")
+                                col_to_explore = st.selectbox("Select a column to explore:", df.columns)
+                                col_dtype = df[col_to_explore].dtype
 
-if col_to_explore:
-    col_dtype = df[col_to_explore].dtype
-    st.write(f"Exploring column `{col_to_explore}` of type `{col_dtype}`")
+                                if col_dtype in [pl.Int64, pl.Float64, pl.Float32, pl.Int32]:
+                                    series = df[col_to_explore].to_pandas()
+                                    fig, ax = plt.subplots()
+                                    ax.hist(series.dropna(), bins=30, color="skyblue")
+                                    ax.set_title(f"Histogram of {col_to_explore}")
+                                    st.pyplot(fig)
+                                elif col_dtype == pl.Utf8:
+                                    counts = df.select(pl.col(col_to_explore).value_counts().sort("counts", descending=True)).to_pandas()
+                                    fig, ax = plt.subplots()
+                                    ax.bar(counts[col_to_explore], counts["counts"])
+                                    plt.xticks(rotation=45, ha='right')
+                                    st.pyplot(fig)
 
-    unique_vals = df[col_to_explore].unique().to_list()
-    st.write(f"Unique values count: {len(unique_vals)}")
+        except Exception as e:
+                    st.error(f"Error during data profiling: {e}")
 
-    if col_dtype in [pl.Int64, pl.Float64, pl.Float32, pl.Int32]:
-        data_series = df[col_to_explore].to_pandas()
-        st.write(f"Descriptive stats:")
-        st.write(data_series.describe())
 
-        fig, ax = plt.subplots()
-        ax.hist(data_series.dropna(), bins=30, color='skyblue')
-        ax.set_title(f"Histogram of {col_to_explore}")
-        st.pyplot(fig)
-
-    elif col_dtype == pl.Utf8:
-        counts = df.select(pl.col(col_to_explore).value_counts()).to_pandas()
-        st.write(counts)
-        fig, ax = plt.subplots()
-        ax.bar(counts[col_to_explore], counts['counts'])
-        ax.set_xticklabels(counts[col_to_explore], rotation=45, ha='right')
-        ax.set_title(f"Value Counts for {col_to_explore}")
-        st.pyplot(fig)
+else:
+    st.info("👆 Please upload a CSV file.")
