@@ -281,128 +281,175 @@ if show_profiling:
                     st.dataframe(pd.DataFrame(explanations))
         except Exception as e:
                     st.error(f"Error during data profiling: {e}")
-        # VISUALIZATIONS SECTION =========
-        st.markdown("---")
-        st.subheader("Visualizations")
+show_ml_demo = st.sidebar.checkbox(" Show ML Use Case Demo")
+if show_ml_demo:
+    st.sidebar.markdown("---")
+    st.sidebar.header("ML Use Case Demo")
+    ml_use_case = st.sidebar.radio(
+        "Select a Machine Learning use case:",
+        [
+            "Credit Default Prediction",
+            "Credit Limit Estimation (Regression)"
+        ]
+    )
 
-        if df is not None:
-            viz_type = st.radio(
-                "Choose Visualization Type:",
-                ("Histogram", "Bar Chart", "Correlation Heatmap"),
-                horizontal=True
-            )
-    
-    # --- Histogram (Single & Advanced) ---
-            if viz_type == "Histogram":
-                advanced_mode = st.checkbox("Advanced Mode: Compare Multiple Columns", value=False)
-                numeric_cols = [col for col, dtype in zip(df.columns, df.dtypes) if dtype in numeric_polars_types]
-                good_numeric_cols = [col for col in numeric_cols if df[col].drop_nulls().n_unique() > 2]
-                if not advanced_mode:
-                    if good_numeric_cols:
-                        selected_hist_col = st.selectbox(
-                            "Select a numeric column to plot histogram:",
-                            good_numeric_cols,
-                            key="hist_col_select"
-                        )
-                        data_series = df[selected_hist_col].to_pandas().dropna()
-                        if len(data_series) > 1:
-                            min_val, max_val = float(data_series.min()), float(data_series.max())
-                            range_slider = st.slider(
-                                f"Select range for {selected_hist_col}:",
-                                min_value=min_val,
-                                max_value=max_val,
-                                value=(min_val, max_val),
-                            )
-                            filtered_data = data_series[(data_series >= range_slider[0]) & (data_series <= range_slider[1])]
-                            fig, ax = plt.subplots()
-                            ax.hist(filtered_data, bins=30, color="skyblue")
-                            ax.set_xlabel(selected_hist_col)
-                            ax.set_ylabel("Frequency")
-                            st.pyplot(fig)
-                        else:
-                            st.info("Selected column does not have sufficient unique values for histogram.")
-                    else:
-                        st.info("No suitable numeric columns found in your dataset for histogram plotting.")
-                else:
-                    selected_cols = st.multiselect(
-                        "Select numeric columns for side-by-side histograms:",
-                        good_numeric_cols,
-                        default=good_numeric_cols[:2] if len(good_numeric_cols) >= 2 else good_numeric_cols
-                    )
-                    if selected_cols:
-                        n_cols = len(selected_cols)
-                        fig, axes = plt.subplots(1, n_cols, figsize=(6 * n_cols, 4))
-                        if n_cols == 1:
-                            axes = [axes]
-                        for ax, col in zip(axes, selected_cols):
-                            data_series = df[col].to_pandas().dropna()
-                            ax.hist(data_series, bins=30, color="skyblue", alpha=0.8)
-                            ax.set_title(f"Histogram of {col}")
-                            ax.set_xlabel(col)
-                            ax.set_ylabel("Frequency")
-                        plt.tight_layout()
-                        st.pyplot(fig)
-                    else:
-                        st.info("Please select at least one column.")
-    
-    # --- Bar Chart (Categorical) ---
-            elif viz_type == "Bar Chart":
-                categorical_cols = [col for col, dtype in zip(df.columns, df.dtypes) if dtype == pl.Utf8]
-                good_categorical_cols = [col for col in categorical_cols if df[col].drop_nulls().n_unique() < 100]
-                if good_categorical_cols:
-                    selected_cat_col = st.selectbox(
-                        "Select a categorical column for bar chart:",
-                        good_categorical_cols,
-                        key="bar_cat_select"
-                    )
-                    vc_pd = df.to_pandas()[selected_cat_col].value_counts().sort_values(ascending=False)
-                    fig, ax = plt.subplots(figsize=(8,4))
-                    ax.bar(vc_pd.index.astype(str), vc_pd.values, color="mediumpurple")
-                    ax.set_xlabel(selected_cat_col)
-                    ax.set_ylabel("Counts")
-                    ax.set_title(f"Value Counts for {selected_cat_col}")
-                    plt.xticks(rotation=45, ha='right')
-                    st.pyplot(fig)
-                else:
-                    st.info("No suitable categorical columns found for bar charts.")
-    
-            # --- Correlation Heatmap ---
-            elif viz_type == "Correlation Heatmap":
-                
-                numeric_cols = [col for col, dtype in zip(df.columns, df.dtypes) if dtype in numeric_polars_types]
-                if len(numeric_cols) >= 2:
-                    selected_corr_cols = st.multiselect(
-                        "Select numeric columns for correlation matrix:",
-                        numeric_cols,
-                        default=numeric_cols[:5] if len(numeric_cols) >= 5 else numeric_cols
-                    )
-                    if len(selected_corr_cols) >= 2:
-                        corr_data = df.select(selected_corr_cols).to_pandas().corr()
-                        fig, ax = plt.subplots(figsize=(1 + len(selected_corr_cols), 1 + len(selected_corr_cols)))
-                        sns.heatmap(corr_data, annot=True, cmap="YlGnBu", ax=ax)
-                        st.pyplot(fig)
-                    else:
-                        st.info("Select at least two columns for correlation heatmap.")
-                else:
-                    st.info("Not enough numeric columns for correlation heatmap.")        
-        else:
-            st.info("Please upload a dataset first to see visualizations.")
+    if ml_use_case == "Credit Default Prediction":
+        st.sidebar.markdown("#### Use Case: Credit Default Prediction")
+        st.sidebar.write("**Goal:** Predict risk of applicant defaulting on credit using demographic and financial features.")
+        st.sidebar.write("**Features Used:**")
+        st.sidebar.write("""
+        - Gender (`CODE_GENDER`)
+        - Age (`DAYS_BIRTH`)
+        - Number of Children (`CNT_CHILDREN`)
+        - Income (`AMT_INCOME_TOTAL`)
+        - Credit Amount (`AMT_CREDIT`)
+        - Annuity (`AMT_ANNUITY`)
+        - Goods Price (`AMT_GOODS_PRICE`)
+        - Days Employed (`DAYS_EMPLOYED`)
+        - Own Car/Realty (`FLAG_OWN_CAR`, `FLAG_OWN_REALTY`)
+        - Housing Type (`NAME_HOUSING_TYPE`)
+        - Organization Type (`ORGANIZATION_TYPE`)
+        """)
+        st.sidebar.write("**Model Used:** Logistic Regression")
+        st.sidebar.write("_A logistic regression model classifies applications as 'default' or 'not default' based on provided features. You can test predictions by entering new data points._")
 
-        # ===== Download Cleaned File =====
-        st.markdown("---")
-        st.subheader(" Export Cleaned Data")
-
-        # Use BytesIO, to support encoding data as well
-        csv_buffer = io.BytesIO()
-        df.write_csv(csv_buffer)
-        csv_buffer.seek(0)  # Rewind to start
-
-        st.download_button(
-            label="Download Cleaned CSV",
-            data=csv_buffer,
-            file_name="cleaned_data.csv",
-            mime="text/csv"
-        )
+    elif ml_use_case == "Credit Limit Estimation (Regression)":
+        st.sidebar.markdown("#### Use Case: Credit Limit Estimation")
+        st.sidebar.write("**Goal:** Estimate expected credit limit (`AMT_CREDIT`) for an applicant based on profile features.")
+        st.sidebar.write("**Features Used:**")
+        st.sidebar.write("""
+        - Income (`AMT_INCOME_TOTAL`)
+        - Age (`DAYS_BIRTH`)
+        - Number of Children (`CNT_CHILDREN`)
+        - Employment Duration (`DAYS_EMPLOYED`)
+        - Housing/Organization Type
+        """)
+        st.sidebar.write("**Model Used:** Linear Regression")
+        st.sidebar.write("_A linear regression model predicts the amount of credit that can be granted. You can input sample data to get a prediction._")
 
 else:
     st.info("👆 Please upload a CSV file.")
+# VISUALIZATIONS SECTION =========
+st.markdown("---")
+st.subheader("Visualizations")
+
+if df is not None:
+    viz_type = st.radio(
+        "Choose Visualization Type:",
+        ("Histogram", "Bar Chart", "Correlation Heatmap"),
+        horizontal=True
+    )
+
+# --- Histogram (Single & Advanced) ---
+    if viz_type == "Histogram":
+        advanced_mode = st.checkbox("Advanced Mode: Compare Multiple Columns", value=False)
+        numeric_cols = [col for col, dtype in zip(df.columns, df.dtypes) if dtype in numeric_polars_types]
+        good_numeric_cols = [col for col in numeric_cols if df[col].drop_nulls().n_unique() > 2]
+        if not advanced_mode:
+            if good_numeric_cols:
+                selected_hist_col = st.selectbox(
+                    "Select a numeric column to plot histogram:",
+                    good_numeric_cols,
+                    key="hist_col_select"
+                )
+                data_series = df[selected_hist_col].to_pandas().dropna()
+                if len(data_series) > 1:
+                    min_val, max_val = float(data_series.min()), float(data_series.max())
+                    range_slider = st.slider(
+                        f"Select range for {selected_hist_col}:",
+                        min_value=min_val,
+                        max_value=max_val,
+                        value=(min_val, max_val),
+                    )
+                    filtered_data = data_series[(data_series >= range_slider[0]) & (data_series <= range_slider[1])]
+                    fig, ax = plt.subplots()
+                    ax.hist(filtered_data, bins=30, color="skyblue")
+                    ax.set_xlabel(selected_hist_col)
+                    ax.set_ylabel("Frequency")
+                    st.pyplot(fig)
+                else:
+                    st.info("Selected column does not have sufficient unique values for histogram.")
+            else:
+                st.info("No suitable numeric columns found in your dataset for histogram plotting.")
+        else:
+            selected_cols = st.multiselect(
+                "Select numeric columns for side-by-side histograms:",
+                good_numeric_cols,
+                default=good_numeric_cols[:2] if len(good_numeric_cols) >= 2 else good_numeric_cols
+            )
+            if selected_cols:
+                n_cols = len(selected_cols)
+                fig, axes = plt.subplots(1, n_cols, figsize=(6 * n_cols, 4))
+                if n_cols == 1:
+                    axes = [axes]
+                for ax, col in zip(axes, selected_cols):
+                    data_series = df[col].to_pandas().dropna()
+                    ax.hist(data_series, bins=30, color="skyblue", alpha=0.8)
+                    ax.set_title(f"Histogram of {col}")
+                    ax.set_xlabel(col)
+                    ax.set_ylabel("Frequency")
+                plt.tight_layout()
+                st.pyplot(fig)
+            else:
+                st.info("Please select at least one column.")
+
+# --- Bar Chart (Categorical) ---
+    elif viz_type == "Bar Chart":
+        categorical_cols = [col for col, dtype in zip(df.columns, df.dtypes) if dtype == pl.Utf8]
+        good_categorical_cols = [col for col in categorical_cols if df[col].drop_nulls().n_unique() < 100]
+        if good_categorical_cols:
+            selected_cat_col = st.selectbox(
+                "Select a categorical column for bar chart:",
+                good_categorical_cols,
+                key="bar_cat_select"
+            )
+            vc_pd = df.to_pandas()[selected_cat_col].value_counts().sort_values(ascending=False)
+            fig, ax = plt.subplots(figsize=(8,4))
+            ax.bar(vc_pd.index.astype(str), vc_pd.values, color="mediumpurple")
+            ax.set_xlabel(selected_cat_col)
+            ax.set_ylabel("Counts")
+            ax.set_title(f"Value Counts for {selected_cat_col}")
+            plt.xticks(rotation=45, ha='right')
+            st.pyplot(fig)
+        else:
+            st.info("No suitable categorical columns found for bar charts.")
+
+    # --- Correlation Heatmap ---
+    elif viz_type == "Correlation Heatmap":
+        
+        numeric_cols = [col for col, dtype in zip(df.columns, df.dtypes) if dtype in numeric_polars_types]
+        if len(numeric_cols) >= 2:
+            selected_corr_cols = st.multiselect(
+                "Select numeric columns for correlation matrix:",
+                numeric_cols,
+                default=numeric_cols[:5] if len(numeric_cols) >= 5 else numeric_cols
+            )
+            if len(selected_corr_cols) >= 2:
+                corr_data = df.select(selected_corr_cols).to_pandas().corr()
+                fig, ax = plt.subplots(figsize=(1 + len(selected_corr_cols), 1 + len(selected_corr_cols)))
+                sns.heatmap(corr_data, annot=True, cmap="YlGnBu", ax=ax)
+                st.pyplot(fig)
+            else:
+                st.info("Select at least two columns for correlation heatmap.")
+        else:
+            st.info("Not enough numeric columns for correlation heatmap.")        
+else:
+    st.info("Please upload a dataset first to see visualizations.")
+
+# ===== Download Cleaned File =====
+st.markdown("---")
+st.subheader(" Export Cleaned Data")
+if df is not None:
+    # Use BytesIO, to support encoding data as well
+    csv_buffer = io.BytesIO()
+    df.write_csv(csv_buffer)
+    csv_buffer.seek(0)  # Rewind to start
+
+    st.download_button(
+        label="Download Cleaned CSV",
+        data=csv_buffer,
+        file_name="cleaned_data.csv",
+        mime="text/csv"
+    )
+else:
+    st.info("Please upload and clean data first to enable export.")
