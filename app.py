@@ -6,6 +6,9 @@ import seaborn as sns
 import numpy as np
 import io
 import locale
+from ydata_profiling import ProfileReport
+from streamlit_pandas_profiling import st_profile_report
+
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
 from sklearn.linear_model import LogisticRegression, LinearRegression
@@ -16,7 +19,7 @@ st.set_page_config(
     page_title="Aadhiya Maria Thomas - Streamlit Data Tool",
     layout="wide"
 )
-st.title("📊 Streamlit Data Tool: Cleansing, Profiling & ML")
+st.title("📊 Streamlit Data Tool: Cleansing, Profiling & ML by Aadhiya Thomas")
 
 numeric_polars_types = [
     pl.Int8, pl.Int16, pl.Int32, pl.Int64,
@@ -27,34 +30,24 @@ numeric_polars_types = [
 # ============================= SIDEBAR =============================
 st.sidebar.header("📂 File Upload")
 uploaded_file = st.sidebar.file_uploader("Upload CSV or Excel", type=["csv", "xlsx"])
-df = None
-
-if uploaded_file:
+if uploaded_file is not None:
     try:
         if uploaded_file.name.endswith(".csv"):
-            df = pl.read_csv(uploaded_file, infer_schema_length=10000, ignore_errors=True)
+            new_df = pl.read_csv(uploaded_file, infer_schema_length=10000, ignore_errors=True)
         else:
-            df = pl.from_pandas(pd.read_excel(uploaded_file))
-        st.sidebar.success(f"{df.height} rows × {df.width} columns loaded.")
+            new_df = pl.from_pandas(pd.read_excel(uploaded_file))
+        st.session_state['df'] = new_df  # Save to session state
     except Exception as e:
-        st.sidebar.error(f"Error loading file: {e}")
+        st.warning(f"Failed to load file: {e}")
+
 
 # Global Sidebar Toggles
 st.sidebar.markdown("---")
-show_profiling = st.sidebar.checkbox("📈 Show Data Profiling")
+show_profiling = st.sidebar.checkbox(" Show Data Profiling")
 #show_ml_demo = st.sidebar.checkbox("🤖 Show ML Use Case Demo")
 
-# Export Cleaned CSV
-if df is not None:
-    buf = io.BytesIO()
-    df.write_csv(buf)
-    buf.seek(0)
-    st.sidebar.download_button(
-        "💾 Download Cleaned CSV",
-        buf,
-        file_name="cleaned_data.csv",
-        mime="text/csv"
-    )
+
+
 
 # ============================= TABS =============================
 tab_upload, tab_clean, tab_profile, tab_ml, tab_viz = st.tabs([
@@ -67,19 +60,23 @@ tab_upload, tab_clean, tab_profile, tab_ml, tab_viz = st.tabs([
 
 # ---------------- TAB 1: Upload ----------------
 with tab_upload:
-    st.subheader("📥 Dataset Preview")
+    df = st.session_state.get('df')
+    st.subheader(" Dataset Preview")
     if df is not None:
         st.write(f"**Shape:** {df.height} rows × {df.width} columns")
         st.dataframe(df.head(10), use_container_width=True)
     else:
         st.info("Please upload a dataset from the sidebar to begin.")
 
+
 # ---------------- TAB 2: Cleaning ----------------
 with tab_clean:
-    if df is None:
+    cleaned_df = st.session_state.get('df') 
+    
+    if cleaned_df is None or cleaned_df.is_empty():
         st.info("Upload a dataset to start cleaning.")
     else:
-        st.subheader("🧹 Data Cleaning")
+        st.subheader(" Data Cleaning")
         
         # Missing Value Summary
         st.markdown("### Missing Data Summary")
@@ -95,31 +92,85 @@ with tab_clean:
             selected_cols = numeric_cols
 
         method = st.radio("Choose method:", ["Fill with Mean", "Fill with Median", "Fill with Mode", "Drop Rows", "Drop Columns"])
+        # Print columns before handling
+        st.write("Columns before cleaning:", df.columns)
+        cleaned_df = st.session_state.get('df')
 
         if st.button("Apply Missing Value Handling"):
             if not selected_cols:
                 st.warning("Select columns first.")
             else:
+                actions = []
                 for c in selected_cols:
                     if method == "Fill with Mean":
-                        df = df.with_columns(pl.col(c).fill_null(df[c].mean()))
+                        cleaned_df = cleaned_df.with_columns(pl.col(c).fill_null(cleaned_df[c].mean()))
+                        actions.append(f"Filled missing values in column '{c}' with mean")
                     elif method == "Fill with Median":
-                        df = df.with_columns(pl.col(c).fill_null(df[c].median()))
+                        cleaned_df = cleaned_df.with_columns(pl.col(c).fill_null(cleaned_df[c].median()))
+                        actions.append(f"Filled missing values in column '{c}' with median")
                     elif method == "Fill with Mode":
-                        mode_val = df[c].drop_nulls().mode()[0]
-                        df = df.with_columns(pl.col(c).fill_null(mode_val))
+                        mode_val = cleaned_df[c].drop_nulls().mode()[0]
+                        cleaned_df = cleaned_df.with_columns(pl.col(c).fill_null(mode_val))
+                        actions.append(f"Filled missing values in column '{c}' with mode")
                     elif method == "Drop Rows":
-                        df = df.drop_nulls(subset=selected_cols)
+                        before_rows = cleaned_df.height
+                        cleaned_df = cleaned_df.drop_nulls(subset=selected_cols)
+                        after_rows = cleaned_df.height
+                        actions.append(f"Dropped {before_rows - after_rows} rows with missing data in columns: {', '.join(selected_cols)}")
+                        break
                     elif method == "Drop Columns":
-                        df = df.drop(selected_cols)
-                st.success("Missing values handled successfully.")
+                        cleaned_df = cleaned_df.drop(selected_cols)
+                        actions.append(f"Dropped columns: {', '.join(selected_cols)}")
+                        break
+                st.write("Columns after cleaning:", cleaned_df.columns)
+                
+                # Update session state with fully cleaned dataframe
+                st.session_state['cleaned_df'] = cleaned_df
 
+                for action in actions:
+                    st.info(action)
+                # After applying missing value handling and showing action messages
+
+
+                
+                #missing_counts = {col: int(cleaned_df[col].null_count()) for col in cleaned_df.columns}
+                #st.table(missing_counts)
         # Duplicate Removal
         duplicates = df.to_pandas().duplicated().sum()
         st.write(f"Found **{duplicates}** duplicate rows.")
         if duplicates > 0 and st.button("Remove Duplicates"):
             df = df.unique()
+            st.session_state['cleaned_df'] = df
             st.success("Duplicates removed.")
+# Step 1: Prepare export toggle button
+        if st.button("Prepare Export of Cleaned Data"):
+            st.session_state['export_ready'] = True
+
+        # Step 2: If export is prepared, ask user if they want more changes
+        if st.session_state.get('export_ready', False):
+            more_changes = st.radio(
+                "Do you want to make more changes before exporting?",
+                options=["Yes", "No"],
+                index=0  # default to Yes (more changes)
+            )
+
+            if more_changes == "No":
+                # Show the download button
+                cleaned_df = st.session_state.get('cleaned_df') 
+                #if cleaned_df is not None:
+                csv_str = cleaned_df.to_pandas().to_csv(index=False)
+                csv_bytes = csv_str.encode('utf-8')
+                st.download_button(
+                    label=" Download Cleaned CSV",
+                    data=csv_bytes,
+                    file_name="cleaned_data.csv",
+                    mime="text/csv"
+                )
+                #if st.button("Done Exporting"):
+                    #st.session_state['export_ready'] = False  # Reset export state
+            else:
+                st.info("Please make any additional changes you want before exporting.")
+
 
 # ---------------- TAB 3: Profiling ----------------
 with tab_profile:
