@@ -546,7 +546,8 @@ if show_ml_demo:
                     st.write("Confusion Matrix:")
                     st.dataframe(pd.DataFrame(cm, columns=['Pred 0', 'Pred 1'], index=['Actual 0', 'Actual 1']))
                     st.write("Classification Report:")
-                    st.text(classification_report(y_test, y_pred))
+                    st.text(classification_report(y_test, y_pred, zero_division=0))
+
                     st.write("Feature Importances (coefficients):")
                     st.dataframe(pd.DataFrame({"Feature": features, "Importance": model.coef_[0]}).sort_values(by="Importance", ascending=False))
 
@@ -621,9 +622,9 @@ if show_ml_demo:
 
                     # Fill missing values
                     for col in X.select_dtypes(include=[np.number]).columns:
-                        X[col].fillna(X[col].median(), inplace=True)
+                        X[col] = X[col].fillna(X[col].median())
                     for col in X.select_dtypes(include='object').columns:
-                        X[col].fillna(X[col].mode()[0], inplace=True)
+                         X[col] = X[col].fillna(X[col].mode()[0])
 
                     # Label encode categorical columns
                     encoders = {}
@@ -645,7 +646,8 @@ if show_ml_demo:
                     st.write("Confusion Matrix:")
                     st.dataframe(pd.DataFrame(cm, columns=['Pred 0', 'Pred 1'], index=['Actual 0', 'Actual 1']))
                     st.write("Classification Report:")
-                    st.text(classification_report(y_test, y_pred))
+                    st.text(classification_report(y_test, y_pred, zero_division=0))
+
                     st.write("Feature Importances (coefficients):")
                     st.dataframe(pd.DataFrame({"Feature": features, "Importance": model.coef_[0]}).sort_values(by="Importance", ascending=False))
 
