@@ -204,14 +204,46 @@ with tab_profile:
                 with st.expander(f"Value Counts: {col}"):
                     st.dataframe(counts)
         
-        # Full automated profiling using ydata-profiling
+        # --- Automated ydata-profiling (with optimization) ---
         st.markdown("---")
-        st.markdown("#### Full Automated Data Profile (ydata-profiling)")
+        st.markdown("#### Automated Data Profile Report (ydata-profiling)")
+        pd_df = df.to_pandas()
+        row_count = len(pd_df)
+
+        # 1. Warning for large datasets and ask for sampling
+        max_sample = 1000
+        sample = False
+        if row_count > max_sample:
+            sample = st.checkbox(
+                f"⚡ Your dataset has {row_count} rows. Tick to profile a random sample of {max_sample} rows for speed.",
+                value=True
+            )
+        else:
+            sample = False
+
+        # 2. Column subset selector for profiling
+        st.markdown("Select columns to include in the full profile (optional):")
+        selected_columns = st.multiselect(
+            "Columns for ydata-profiling (default: all columns)",
+            list(pd_df.columns),
+            default=list(pd_df.columns)[:min(10, len(pd_df.columns))]
+        )
+
         if st.button("Generate Full Profile Report"):
-            # Convert to pandas and generate profile
-            pd_df = df.to_pandas()
-            profile = ProfileReport(pd_df, title="Data Profile", explorative=True)
+            prof_df = pd_df
+            if sample:
+                prof_df = prof_df.sample(n=max_sample, random_state=42)
+                st.info(f"Profiling on a random sample of {max_sample} rows for faster results.")
+            if selected_columns:
+                prof_df = prof_df[selected_columns]
+            # Basic ProfileReport call
+            profile = ProfileReport(
+                prof_df,
+                title="Automated Data Profile",
+                explorative=True
+            )
             st_profile_report(profile)
+
             
 # ---------------- TAB 4:ML ----------------            
 with tab_ml:
