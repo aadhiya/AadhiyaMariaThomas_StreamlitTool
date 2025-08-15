@@ -42,7 +42,7 @@ if uploaded_file:
 # Global Sidebar Toggles
 st.sidebar.markdown("---")
 show_profiling = st.sidebar.checkbox("📈 Show Data Profiling")
-show_ml_demo = st.sidebar.checkbox("🤖 Show ML Use Case Demo")
+#show_ml_demo = st.sidebar.checkbox("🤖 Show ML Use Case Demo")
 
 # Export Cleaned CSV
 if df is not None:
@@ -169,6 +169,7 @@ with tab_ml:
         st.subheader(f"Selected Use Case: {ml_use_case}")
 
         if ml_use_case == "Credit Default Prediction":
+            st.markdown("**Goal:** Predict the risk that an applicant will miss scheduled payments on their loan or credit obligation based on their demographic features (like gender, age, number of children), financial features (income, credit amount, annuity, goods price), employment duration, ownership flags, and housing and organization types.")
             st.subheader("Step 1: Prepare Data Quality Check")
             required_columns = [
                 "TARGET", "CODE_GENDER", "DAYS_BIRTH", "CNT_CHILDREN", "AMT_INCOME_TOTAL",
@@ -269,8 +270,11 @@ with tab_ml:
                     st.write("Confusion Matrix:")
                     st.dataframe(pd.DataFrame(cm, columns=['Pred 0', 'Pred 1'], index=['Actual 0', 'Actual 1']))
 
-                    st.write("Classification Report:")
-                    st.text(classification_report(y_test, y_pred, zero_division=0))
+                    report_dict = classification_report(y_test, y_pred, output_dict=True, zero_division=0)
+                    report_df = pd.DataFrame(report_dict).transpose()
+                    report_df = report_df.round(2)
+                    st.markdown("#### Classification Report")
+                    st.dataframe(report_df, use_container_width=True)
 
                     st.write("Feature Importances (coefficients):")
                     st.dataframe(
@@ -312,6 +316,7 @@ with tab_ml:
                     st.info("Please train the model first.")
 
         elif ml_use_case == "Credit Limit Estimation (Regression)":
+            st.markdown("**Goal:** Predict the expected credit limit for an applicant using key profile features such as income, age, number of children, employment duration, housing status, and organization type")
             st.subheader("Step 1: Prepare Data Quality Check")
             required_columns = [
                 "AMT_CREDIT", "AMT_INCOME_TOTAL", "DAYS_BIRTH", "CNT_CHILDREN",
