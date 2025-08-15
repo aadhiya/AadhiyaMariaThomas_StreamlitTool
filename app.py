@@ -522,9 +522,9 @@ if show_ml_demo:
 
                     # Fill missing values
                     for col in X.select_dtypes(include=[np.number]).columns:
-                        X[col].fillna(X[col].median(), inplace=True)
+                         X[col] = X[col].fillna(X[col].median())
                     for col in X.select_dtypes(include='object').columns:
-                        X[col].fillna(X[col].mode()[0], inplace=True)
+                        X[col] = X[col].fillna(X[col].mode()[0])
 
                     # Label encode categorical columns
                     encoders = {}
