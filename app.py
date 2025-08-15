@@ -23,7 +23,13 @@ uploaded_file = st.file_uploader(
     type=["csv", "xlsx"],
     help="Select a .csv or .xlsx file from your computer"
 )
+numeric_polars_types = [
+    pl.Int8, pl.Int16, pl.Int32, pl.Int64,
+    pl.UInt8, pl.UInt16, pl.UInt32, pl.UInt64,
+    pl.Float32, pl.Float64
+]
 
+df = None
 # Step 2: Only process if file exists
 if uploaded_file is not None:
     try:
@@ -43,7 +49,17 @@ if uploaded_file is not None:
 
         st.write(f"**Shape:** {df.height} rows × {df.width} columns")
         st.dataframe(df.head(10))
+        
 
+        # Optionally: force conversion (skip if you want only inferred types)
+        for col in df.columns:
+            # Try to coerce to float if possible (non-numeric remain unchanged)
+            try:
+                df = df.with_columns(
+                    pl.col(col).cast(pl.Float64, strict=False).alias(col)
+                )
+            except Exception:
+                pass
     except Exception as e:
         st.warning(f"Warning: Could not load file. Details: {e}")
 
@@ -70,8 +86,8 @@ if show_profiling:
 # Numeric summary
 
             if show_numeric:
-                numeric_cols = [col for col, dtype in zip(df.columns, df.dtypes) 
-                                if dtype in [pl.Int64, pl.Float64, pl.Float32, pl.Int32]]
+                numeric_cols = [col for col, dtype in zip(df.columns, df.dtypes) if dtype in numeric_polars_types]
+                st.write("Detected numeric columns:", numeric_cols)
                 if numeric_cols:
                     st.markdown("### 📌 Numeric Columns Summary")
                     stats_df = df.select(
@@ -271,34 +287,32 @@ if show_profiling:
         if 'df' in locals() or 'df' in globals():
             st.markdown("### Histogram of Numerical Features")
             # Find all numeric columns in the loaded dataframe
-            numeric_cols = [col for col, dtype in zip(df.columns, df.dtypes) if "int" in str(dtype) or "float" in str(dtype)]
-            if numeric_cols:
-                # Let the user choose a column to plot
+            numeric_cols = [col for col, dtype in zip(df.columns, df.dtypes) if dtype in numeric_polars_types]
+            # Filter only truly numeric columns with some >1 unique values
+            good_numeric_cols = [col for col in numeric_cols if df[col].drop_nulls().n_unique() > 2]
+            st.write("Available for histogram:", good_numeric_cols)
+            if good_numeric_cols:
                 selected_hist_col = st.selectbox(
                     "Select a numeric column to plot histogram:",
-                    numeric_cols,
+                    good_numeric_cols,
                     key="hist_col_select"
                 )
-                #  add filtering sliders for users 
-                min_val = float(df[selected_hist_col].drop_nulls().min())
-                max_val = float(df[selected_hist_col].drop_nulls().max())
-                # Range slider for focus
-                range_slider = st.slider(
-                    f"Select range for {selected_hist_col}:",
-                    min_value=min_val, max_value=max_val, value=(min_val, max_val)
-                )
-                # Filter data by slider range
-                filtered_data = df.filter(
-                    (pl.col(selected_hist_col) >= range_slider[0]) & (pl.col(selected_hist_col) <= range_slider[1])
-                )
-                # Plot histogram using matplotlib
-                st.write(f"Histogram for {selected_hist_col} (filtered)")
-                fig, ax = plt.subplots()
-                series = filtered_data[selected_hist_col].to_pandas().dropna()
-                ax.hist(series, bins=30, color="skyblue")
-                ax.set_xlabel(selected_hist_col)
-                ax.set_ylabel("Frequency")
-                st.pyplot(fig)
+                data_series = df[selected_hist_col].to_pandas().dropna()
+                if len(data_series) > 1:
+                    min_val, max_val = float(data_series.min()), float(data_series.max())
+                    range_slider = st.slider(
+                        f"Select range for {selected_hist_col}:",
+                        min_value=min_val, max_value=max_val, value=(min_val, max_val)
+                    )
+                    # Filter by slider
+                    filtered_data = data_series[(data_series >= range_slider[0]) & (data_series <= range_slider[1])]
+                    fig, ax = plt.subplots()
+                    ax.hist(filtered_data, bins=30, color="skyblue")
+                    ax.set_xlabel(selected_hist_col)
+                    ax.set_ylabel("Frequency")
+                    st.pyplot(fig)
+                else:
+                    st.info("Selected column does not have sufficient unique values for histogram.")
             else:
                 st.info("No numeric columns found in your dataset for histogram plotting.")
         else:
