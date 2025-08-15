@@ -2,6 +2,8 @@ import streamlit as st
 import polars as pl
 import pandas as pd
 import matplotlib.pyplot as plt
+import io
+
 # PAGE CONFIGURATION
 st.set_page_config(
     page_title="Streamlit based Data Cleansing, Profiling & ML Tool by Aadhiya Maria Thomas",
@@ -95,46 +97,67 @@ if show_profiling:
                                         st.dataframe(counts_df)
                             else:
                                 st.info("No categorical columns found.")
+# Categorical Encoding
+                            st.markdown("#### 🔤 Encode Categorical Feature(s)")
+                            col_to_encode = st.multiselect(
+                                "Select categorical column(s) to encode (Label Encoding):",
+                                categorical_cols
+                            )
+
+                            if col_to_encode:
+                                st.write("**To be encoded:**", ", ".join(col_to_encode))
+                                if st.button("Apply Label Encoding to selected column(s)"):
+                                    for col in col_to_encode:
+                                        unique_vals = df[col].unique().to_list()
+                                        encoding_map = {val: i for i, val in enumerate(unique_vals)}
+                                        df = df.with_columns(
+                                            pl.col(col).replace(encoding_map).alias(col + "_LE")
+                                        )
+                                    st.success(f"✅ Label Encoding applied to: {', '.join(col_to_encode)} (new columns: {', '.join([c + '_LE' for c in col_to_encode])})")
+                                    st.dataframe(df[[*col_to_encode, *[c + '_LE' for c in col_to_encode]]].head())
 # Missing Data Summary
             if show_missing:
                             st.markdown("### ❗ Missing Data Summary")
                             missing_counts = {col: int(df[col].null_count()) for col in df.columns}
                             st.table(missing_counts)
                             st.markdown("#### 🛠 Handle Missing Values")
-
-                            # Let the user choose a column or "All numeric columns"
-                            target_col = st.sidebar.multiselect(
-                            "Type to search and select column(s) to clean:",
-                            ["All numeric columns"] + list(df.columns),
-                            max_selections=2  # if you want single-select behavior
+                            cols_to_change = []
+                            # Multiselect for columns - allows search and multiple selections
+                            selected_cols = st.multiselect(
+                                "Select column(s) to clean:",
+                                df.columns,
+                                placeholder="Type to search columns..."
                             )
-                            if target_col:
-                                target_col = target_col[0]  # if you want just one column
+
+                            # If no column is chosen, allow the special "All numeric columns" shortcut
+                            apply_to_all_numeric = st.checkbox("Apply to ALL numeric columns")
+
+                            # Show chosen columns preview
+                            if selected_cols and not apply_to_all_numeric:
+                                cols_to_change = selected_cols
+                                st.write("**Selected Columns:**", ", ".join(cols_to_change))
+                            elif apply_to_all_numeric:
+                                cols_to_change = [c for c, t in zip(df.columns, df.dtypes)
+                                                if "int" in str(t) or "float" in str(t)]
+                                st.write("**Selected Columns:**", ", ".join(cols_to_change))
                             else:
-                                target_col = "All numeric columns"
-
-
+                                st.info("Select at least one column, or use 'All numeric columns' option.")
                             method = st.radio(
                                 "Choose a method:",
                                 ["Fill with Mean", "Fill with Median", "Fill with Mode", "Drop Rows", "Drop Column"]
                             )
 
                             if st.button("Apply Missing Value Handling"):
-                                if method == "Drop Column":
-                                    if target_col == "All numeric columns":
-                                        st.warning("Please select a specific column to drop.")
-                                    else:
-                                        df = df.drop(target_col)
-                                elif method == "Drop Rows":
-                                    if target_col == "All numeric columns":
-                                        df = df.drop_nulls()
-                                    else:
-                                        df = df.drop_nulls(subset=[target_col])
+                                if not cols_to_change:
+                                    st.warning("Please select columns or choose 'All numeric columns'.")
                                 else:
-                                    import statistics
-                                    if target_col == "All numeric columns":
-                                        num_cols = [c for c,t in zip(df.columns, df.dtypes) if "int" in str(t) or "float" in str(t)]
-                                        for c in num_cols:
+                                    # Perform operation
+                                    if method == "Drop Column":
+                                        df = df.drop(cols_to_change)
+                                    elif method == "Drop Rows":
+                                        df = df.drop_nulls(subset=cols_to_change)
+                                    else:
+                                        for c in cols_to_change:
                                             if method == "Fill with Mean":
                                                 df = df.with_columns(pl.col(c).fill_null(df[c].mean()))
                                             elif method == "Fill with Median":
@@ -142,18 +165,11 @@ if show_profiling:
                                             elif method == "Fill with Mode":
                                                 mode_val = df[c].drop_nulls().mode()[0]
                                                 df = df.with_columns(pl.col(c).fill_null(mode_val))
-                                    else:
-                                        if method == "Fill with Mean":
-                                            df = df.with_columns(pl.col(target_col).fill_null(df[target_col].mean()))
-                                        elif method == "Fill with Median":
-                                            df = df.with_columns(pl.col(target_col).fill_null(df[target_col].median()))
-                                        elif method == "Fill with Mode":
-                                            mode_val = df[target_col].drop_nulls().mode()[0]
-                                            df = df.with_columns(pl.col(target_col).fill_null(mode_val))
 
-                                st.success(" Missing value handling applied!")
+                            st.success(f"✅ Applied '{method}' to columns: {', '.join(cols_to_change)}")
+                            st.dataframe(df.head())
                                 # Optionally show updated preview
-                                st.dataframe(df.head())
+                            st.dataframe(df.head())
 
 # ===== Duplicate Handling =====
             st.markdown("###  Duplicate Records Check")
@@ -247,6 +263,19 @@ if show_profiling:
         except Exception as e:
                     st.error(f"Error during data profiling: {e}")
 
+        # ===== Download Cleaned File =====
+        st.markdown("---")
+        st.subheader(" Export Cleaned Data")
+
+        csv_buffer = io.StringIO()
+        df.write_csv(csv_buffer)
+
+        st.download_button(
+            label="Download Cleaned CSV",
+            data=csv_buffer.getvalue(),
+            file_name="cleaned_data.csv",
+            mime="text/csv"
+        )
 
 else:
     st.info("👆 Please upload a CSV file.")
