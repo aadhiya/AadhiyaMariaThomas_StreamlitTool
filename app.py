@@ -113,7 +113,7 @@ if show_profiling:
                                         df = df.with_columns(
                                             pl.col(col).replace(encoding_map).alias(col + "_LE")
                                         )
-                                    st.success(f"✅ Label Encoding applied to: {', '.join(col_to_encode)} (new columns: {', '.join([c + '_LE' for c in col_to_encode])})")
+                                    st.success(f" Label Encoding applied to: {', '.join(col_to_encode)} (new columns: {', '.join([c + '_LE' for c in col_to_encode])})")
                                     st.dataframe(df[[*col_to_encode, *[c + '_LE' for c in col_to_encode]]].head())
 # Missing Data Summary
             if show_missing:
@@ -166,7 +166,7 @@ if show_profiling:
                                                 mode_val = df[c].drop_nulls().mode()[0]
                                                 df = df.with_columns(pl.col(c).fill_null(mode_val))
 
-                            st.success(f"✅ Applied '{method}' to columns: {', '.join(cols_to_change)}")
+                            st.success(f" Applied '{method}' to columns: {', '.join(cols_to_change)}")
                             st.dataframe(df.head())
                                 # Optionally show updated preview
                             st.dataframe(df.head())
@@ -267,12 +267,14 @@ if show_profiling:
         st.markdown("---")
         st.subheader(" Export Cleaned Data")
 
-        csv_buffer = io.StringIO()
+        # Use BytesIO, to support encoding data as well
+        csv_buffer = io.BytesIO()
         df.write_csv(csv_buffer)
+        csv_buffer.seek(0)  # Rewind to start
 
         st.download_button(
             label="Download Cleaned CSV",
-            data=csv_buffer.getvalue(),
+            data=csv_buffer,
             file_name="cleaned_data.csv",
             mime="text/csv"
         )
