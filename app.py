@@ -321,23 +321,22 @@ if show_profiling:
             else:
                 # ---- Advanced: multiselect and overlayed histograms ----
                 selected_cols = st.multiselect(
-                    "Select numeric columns for overlayed histograms:",
-                    good_numeric_cols,
-                    default=good_numeric_cols[:2] if len(good_numeric_cols) >= 2 else good_numeric_cols
+                "Select numeric columns for side-by-side histograms:",
+                good_numeric_cols,
+                default=good_numeric_cols[:2] if len(good_numeric_cols) >= 2 else good_numeric_cols
                 )
                 if selected_cols:
-                    fig, ax = plt.subplots()
-                    for col in selected_cols:
+                    n_cols = len(selected_cols)
+                    fig, axes = plt.subplots(1, n_cols, figsize=(6 * n_cols, 4))
+                    if n_cols == 1:
+                        axes = [axes]  # Make axes iterable if only one selected
+                    for ax, col in zip(axes, selected_cols):
                         data_series = df[col].to_pandas().dropna()
-                        ax.hist(
-                            data_series,
-                            bins=30,
-                            alpha=0.6,
-                            label=col
-                        )
-                    ax.set_xlabel("Value")
-                    ax.set_ylabel("Frequency")
-                    ax.legend()
+                        ax.hist(data_series, bins=30, color="skyblue", alpha=0.8)
+                        ax.set_title(f"Histogram of {col}")
+                        ax.set_xlabel(col)
+                        ax.set_ylabel("Frequency")
+                    plt.tight_layout()
                     st.pyplot(fig)
                 else:
                     st.info("Please select at least one column for the advanced histogram view.")         
