@@ -3,7 +3,7 @@ import polars as pl
 import pandas as pd
 import matplotlib.pyplot as plt
 import io
-
+import seaborn as sns
 # PAGE CONFIGURATION
 st.set_page_config(
     page_title="Streamlit based Data Cleansing, Profiling & ML Tool by Aadhiya Maria Thomas",
@@ -52,14 +52,14 @@ if uploaded_file is not None:
         
 
         # Optionally: force conversion (skip if you want only inferred types)
-        for col in df.columns:
+      # for col in df.columns:
             # Try to coerce to float if possible (non-numeric remain unchanged)
-            try:
-                df = df.with_columns(
-                    pl.col(col).cast(pl.Float64, strict=False).alias(col)
-                )
-            except Exception:
-                pass
+    #       try:
+    #           df = df.with_columns(
+    #               pl.col(col).cast(pl.Float64, strict=False).alias(col)
+    #            )
+    #       except Exception:
+    #            pass
     except Exception as e:
         st.warning(f"Warning: Could not load file. Details: {e}")
 
@@ -76,9 +76,9 @@ if show_profiling:
         try:
             st.sidebar.subheader(" Profiling Sections")
             show_numeric = st.sidebar.checkbox("Numeric Summary", value=True)
-            show_categorical = st.sidebar.checkbox("Categorical Summary", value=True)
-            show_missing = st.sidebar.checkbox("Missing Data Summary", value=True)
-            show_column_explorer = st.sidebar.checkbox("Interactive Column Explorer", value=True)
+            show_categorical = st.sidebar.checkbox("Categorical Summary", value=False)
+            show_missing = st.sidebar.checkbox("Missing Data Summary", value=False)
+            show_column_explorer = st.sidebar.checkbox("Interactive Column Explorer", value=False)
             show_column_explanation = st.sidebar.checkbox("Column Explanation", value=False)
             st.markdown("---")
             st.subheader("📈 Data Profiling Results") 
@@ -106,6 +106,7 @@ if show_profiling:
             if show_categorical:            
                             st.markdown("### 🏷 Categorical Columns Summary")
                             categorical_cols = [col for col, dtype in zip(df.columns, df.dtypes) if dtype == pl.Utf8]
+                            st.write("Detected categorical columns:", categorical_cols)
                             if categorical_cols:
                                 for col in categorical_cols:
                                     counts_df = df.select(pl.col(col).value_counts().sort( descending=True)).to_pandas()
@@ -354,9 +355,9 @@ if show_profiling:
                         good_categorical_cols,
                         key="bar_cat_select"
                     )
-                    value_counts = df.select(pl.col(selected_cat_col).value_counts().sort("counts", descending=True)).to_pandas()
+                    vc_pd = df.to_pandas()[selected_cat_col].value_counts().sort_values(ascending=False)
                     fig, ax = plt.subplots(figsize=(8,4))
-                    ax.bar(value_counts[selected_cat_col], value_counts["counts"], color="mediumpurple")
+                    ax.bar(vc_pd.index.astype(str), vc_pd.values, color="mediumpurple")
                     ax.set_xlabel(selected_cat_col)
                     ax.set_ylabel("Counts")
                     ax.set_title(f"Value Counts for {selected_cat_col}")
@@ -367,7 +368,7 @@ if show_profiling:
     
             # --- Correlation Heatmap ---
             elif viz_type == "Correlation Heatmap":
-                import seaborn as sns
+                
                 numeric_cols = [col for col, dtype in zip(df.columns, df.dtypes) if dtype in numeric_polars_types]
                 if len(numeric_cols) >= 2:
                     selected_corr_cols = st.multiselect(
