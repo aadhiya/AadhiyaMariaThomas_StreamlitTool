@@ -174,16 +174,18 @@ with tab_clean:
 
 # ---------------- TAB 3: Profiling ----------------
 with tab_profile:
-    if df is None:
+    df = st.session_state.get('cleaned_df') or st.session_state.get('df')
+    if df is None or df.is_empty():
         st.info("Upload to view profiling.")
     elif not show_profiling:
         st.info("Enable profiling from sidebar.")
     else:
-        st.subheader("📈 Data Profiling")
+        st.subheader("📈 Data Profiling Summary")
         
-        # Numeric Columns
+        # Numeric summary
         num_cols = [c for c, t in zip(df.columns, df.dtypes) if t in numeric_polars_types]
         if num_cols:
+            st.markdown("#### Numeric Summary")
             stats_df = df.select(
                 [pl.col(c).mean().alias(f"{c}_mean") for c in num_cols] +
                 [pl.col(c).median().alias(f"{c}_median") for c in num_cols] +
@@ -192,14 +194,26 @@ with tab_profile:
             st.dataframe(stats_df)
         else:
             st.warning("No numeric columns found.")
-
-        # Categorical
+        
+        # Categorical summary
         cat_cols = [c for c, t in zip(df.columns, df.dtypes) if t == pl.Utf8]
-        for col in cat_cols:
-            counts = df.select(pl.col(col).value_counts().sort(descending=True)).to_pandas()
-            with st.expander(f"Value Counts: {col}"):
-                st.dataframe(counts)
-
+        if cat_cols:
+            st.markdown("#### Categorical Summary")
+            for col in cat_cols:
+                counts = df.select(pl.col(col).value_counts().sort(descending=True)).to_pandas()
+                with st.expander(f"Value Counts: {col}"):
+                    st.dataframe(counts)
+        
+        # Full automated profiling using ydata-profiling
+        st.markdown("---")
+        st.markdown("#### Full Automated Data Profile (ydata-profiling)")
+        if st.button("Generate Full Profile Report"):
+            # Convert to pandas and generate profile
+            pd_df = df.to_pandas()
+            profile = ProfileReport(pd_df, title="Data Profile", explorative=True)
+            st_profile_report(profile)
+            
+# ---------------- TAB 4:ML ----------------            
 with tab_ml:
     if df is None:
         st.info("Upload a dataset first.")
