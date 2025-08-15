@@ -5,10 +5,12 @@ import matplotlib.pyplot as plt
 import io
 import seaborn as sns
 import numpy as np
+import locale
 
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
 from sklearn.linear_model import LogisticRegression
+from sklearn.linear_model import LinearRegression
 from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
 
 # PAGE CONFIGURATION
@@ -508,8 +510,10 @@ if show_ml_demo:
                 st.success(" Data passes all checks and is ready for ML training.")
                 # --- Continue with model training/prediction code here ---
             # --- Step 2: Train Model ---
+            
                 st.subheader("Step 2: Train Model")
                 selected_model = st.selectbox("Select Model:", ["Logistic Regression"])
+                categorical_cols = ["CODE_GENDER", "FLAG_OWN_CAR", "FLAG_OWN_REALTY", "NAME_HOUSING_TYPE", "ORGANIZATION_TYPE"]
                 if st.button("Train Model"):
                     # Prepare features and target
                     features = [
@@ -517,6 +521,7 @@ if show_ml_demo:
                         "AMT_CREDIT", "AMT_ANNUITY", "AMT_GOODS_PRICE", "DAYS_EMPLOYED",
                         "FLAG_OWN_CAR", "FLAG_OWN_REALTY", "NAME_HOUSING_TYPE", "ORGANIZATION_TYPE"
                     ]
+                    st.session_state['features'] = features
                     X = pd_df[features].copy()
                     y = pd_df["TARGET"].astype(int)
 
@@ -528,7 +533,7 @@ if show_ml_demo:
 
                     # Label encode categorical columns
                     encoders = {}
-                    categorical_cols = ["CODE_GENDER", "FLAG_OWN_CAR", "FLAG_OWN_REALTY", "NAME_HOUSING_TYPE", "ORGANIZATION_TYPE"]
+                    
                     for col in categorical_cols:
                         le = LabelEncoder()
                         X[col] = le.fit_transform(X[col].astype(str))
@@ -540,6 +545,10 @@ if show_ml_demo:
                     model.fit(X_train, y_train)
                     y_pred = model.predict(X_test)
                     acc = accuracy_score(y_test, y_pred)
+                    # SAVE model and encoders to st.session_state:
+                    st.session_state['model'] = model
+                    st.session_state['encoders'] = encoders
+                    st.session_state['X'] = X  # for column medians in prediction
                     st.success(f"Model trained! Accuracy on test data: {acc:.3f}")
 
                     cm = confusion_matrix(y_test, y_pred)
@@ -550,35 +559,54 @@ if show_ml_demo:
 
                     st.write("Feature Importances (coefficients):")
                     st.dataframe(pd.DataFrame({"Feature": features, "Importance": model.coef_[0]}).sort_values(by="Importance", ascending=False))
+                    
+                # Step 3: Prediction Input
+                st.subheader("Step 3: Predict Default Risk on New Applicant")
 
-                    # Step 3: Prediction Input
-                    st.subheader("Step 3: Predict Default Risk on New Applicant")
+                model = st.session_state.get('model')
+                encoders = st.session_state.get('encoders')
+                X = st.session_state.get('X')
+                
 
+                # Only show prediction step if model exists
+                if model is not None and encoders is not None and X is not None:
                     user_input = {}
-
-                    # Categorical input with encoding
+                    # Categorical inputs
                     for col in categorical_cols:
                         options = list(encoders[col].classes_)
                         user_val = st.selectbox(col, options)
                         user_input[col] = encoders[col].transform([user_val])[0]
 
-                    # Numeric input with median defaults
+                    # Numeric inputs (as before)
                     numeric_cols = list(X.select_dtypes(include=[np.number]).columns.difference(categorical_cols))
                     for col in numeric_cols:
                         median_val = float(X[col].median())
                         user_input[col] = st.number_input(col, value=median_val)
 
-                    # Prediction button
                     if st.button("Predict"):
+                        
                         try:
+                            # Retrieve feature list saved during training
+                            features = st.session_state.get('features')
+                            
                             input_df = pd.DataFrame([user_input])
+
+                            # Reorder input_df columns to exactly match training features
+                            input_df = input_df[features]
+
+                            st.write("Input dataframe for prediction:", input_df)
+                            
                             prob = model.predict_proba(input_df)[0][1]
                             pred = model.predict(input_df)
-                            
                             st.info(f"Predicted probability of default: {prob:.2%}")
                             st.write(f"Prediction: {'Default Risk' if pred == 1 else 'Low Risk'}")
                         except Exception as e:
                             st.error(f"Prediction error: {e}")
+
+
+                else:
+                    st.info("Please train the model first.")
+
 
 
     elif ml_use_case == "Credit Limit Estimation (Regression)":
@@ -586,111 +614,122 @@ if show_ml_demo:
         st.subheader("Step 1: Prepare Data Quality Check")
 
         required_columns = [
-            "AMT_CREDIT", "AMT_INCOME_TOTAL", "DAYS_BIRTH", "CNT_CHILDREN",
-            "DAYS_EMPLOYED", "NAME_HOUSING_TYPE", "ORGANIZATION_TYPE"
+        "AMT_CREDIT", "AMT_INCOME_TOTAL", "DAYS_BIRTH", "CNT_CHILDREN",
+        "DAYS_EMPLOYED", "NAME_HOUSING_TYPE", "ORGANIZATION_TYPE"
+    ]
+    missing_cols = [col for col in required_columns if col not in df.columns]
+    err_msgs = []
+    if missing_cols:
+        err_msgs.append(f"Missing required columns: {', '.join(missing_cols)}.\nUse 'Interactive Column Explorer' to check columns and 'Column Explanation' for details.")
+    else:
+        pd_df = df.to_pandas()
+        missing_vals = pd_df[required_columns].isnull().sum()
+        num_missing = missing_vals[missing_vals > 0]
+        if not num_missing.empty:
+            st.warning("The following features have missing values:")
+            st.write(num_missing)
+            st.markdown("""
+                To fix missing **numeric** columns, use 'Missing Data Summary' and fill with **mean/median** (recommended).
+                To fix missing **categorical** columns, fill with **mode** or drop rows/columns as needed using sidebar tools.
+            """)
+
+        numeric_cols = [
+            "AMT_CREDIT", "AMT_INCOME_TOTAL", "DAYS_BIRTH", "CNT_CHILDREN", "DAYS_EMPLOYED"
         ]
-        missing_cols = [col for col in required_columns if col not in df.columns]
-        err_msgs = []
-        if missing_cols:
-            err_msgs.append(f"Missing required columns: {', '.join(missing_cols)}.\nUse 'Interactive Column Explorer' to check columns and 'Column Explanation' for details.")
+        for col in numeric_cols:
+            if not pd.api.types.is_numeric_dtype(pd_df[col]):
+                err_msgs.append(f"Column '{col}' is not numeric. Use 'Interactive Column Explorer' and 'Encode Categorical Feature(s)' or fix data type in sidebar.")
+
+        if len(err_msgs) > 0 or not num_missing.empty:
+            st.error("Data is NOT ready for ML training.")
+            for msg in err_msgs:
+                st.markdown(msg)
+            st.info("Please use the data cleaning options in the sidebar, then export and reload the cleaned data.")
+            st.stop()
         else:
-            pd_df = df.to_pandas()
-            missing_vals = pd_df[required_columns].isnull().sum()
-            num_missing = missing_vals[missing_vals > 0]
-            if not num_missing.empty:
-                st.warning("The following features have missing values:")
-                st.write(num_missing)
-                st.markdown("""
-                 To fix missing **numeric** columns, use 'Missing Data Summary' and fill with **mean/median** (recommended).
-                 To fix missing **categorical** columns, fill with **mode** or drop rows/columns as needed using sidebar tools.
-                """)
-            numeric_cols = [
-                "AMT_CREDIT", "AMT_INCOME_TOTAL", "DAYS_BIRTH", "CNT_CHILDREN", "DAYS_EMPLOYED"
+            st.success("Data passes all checks and is ready for ML training.")
+
+            # --- Step 2: Train Model ---
+            st.subheader("Step 2: Train Model")
+
+            categorical_cols = ["CODE_GENDER", "FLAG_OWN_CAR", "FLAG_OWN_REALTY", "NAME_HOUSING_TYPE", "ORGANIZATION_TYPE"]
+
+            features = [
+                "CODE_GENDER", "DAYS_BIRTH", "CNT_CHILDREN", "AMT_INCOME_TOTAL",
+                "AMT_ANNUITY", "AMT_GOODS_PRICE", "DAYS_EMPLOYED",
+                "FLAG_OWN_CAR", "FLAG_OWN_REALTY", "NAME_HOUSING_TYPE", "ORGANIZATION_TYPE"
             ]
-            for col in numeric_cols:
-                if not pd.api.types.is_numeric_dtype(pd_df[col]):
-                    err_msgs.append(f"Column '{col}' is not numeric. Use 'Interactive Column Explorer' and 'Encode Categorical Feature(s)' or fix data type in sidebar.")
-            if len(err_msgs) > 0 or not num_missing.empty:
-                st.error("Data is NOT ready for ML training.")
-                for msg in err_msgs:
-                    st.markdown(msg)
-                st.info("Please use the data cleaning options in the sidebar, then export and reload the cleaned data.")
-                st.stop()
+            st.session_state['features'] = features
+
+            selected_model = st.selectbox("Select Model:", ["Linear Regression"])
+
+            if st.button("Train Model"):
+                X = pd_df[features].copy()
+                y = pd_df["AMT_CREDIT"].astype(float)
+
+                # Fill missing values
+                for col in X.select_dtypes(include=[np.number]).columns:
+                    X[col] = X[col].fillna(X[col].median())
+                for col in X.select_dtypes(include='object').columns:
+                    X[col] = X[col].fillna(X[col].mode()[0])
+
+                # Label encode categorical columns
+                encoders = {}
+                for col in categorical_cols:
+                    le = LabelEncoder()
+                    X[col] = le.fit_transform(X[col].astype(str))
+                    encoders[col] = le
+
+                X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+                from sklearn.linear_model import LinearRegression
+                model = LinearRegression()
+                model.fit(X_train, y_train)
+
+                y_pred = model.predict(X_test)
+                from sklearn.metrics import mean_squared_error, r2_score
+                locale.setlocale(locale.LC_ALL, '') 
+                mse = mean_squared_error(y_test, y_pred)
+                r2 = r2_score(y_test, y_pred)
+                rmse = mse ** 0.5
+                # Save model and encoders for prediction
+                st.session_state['model'] = model
+                st.session_state['encoders'] = encoders
+                st.session_state['X'] = X
+
+                st.success(f"Model trained successfully!")
+                st.write(f"R² score (Goodness of fit): **{r2 * 100:.2f}%**")
+                st.write(f"Root Mean Squared Error (RMSE): **₹{rmse:,.0f}** (average prediction error)")
+
+            # Step 3: Prediction Input
+            st.subheader("Step 3: Predict Credit Limit for New Applicant")
+
+            model = st.session_state.get('model')
+            encoders = st.session_state.get('encoders')
+            X = st.session_state.get('X')
+
+            if model is not None and encoders is not None and X is not None:
+                user_input = {}
+                for col in categorical_cols:
+                    options = list(encoders[col].classes_)
+                    user_val = st.selectbox(col, options)
+                    user_input[col] = encoders[col].transform([user_val])[0]
+
+                numeric_cols = list(X.select_dtypes(include=[np.number]).columns.difference(categorical_cols))
+                for col in numeric_cols:
+                    median_val = float(X[col].median())
+                    user_input[col] = st.number_input(col, value=median_val)
+
+                if st.button("Predict"):
+                    try:
+                        features = st.session_state.get('features')
+                        input_df = pd.DataFrame([user_input])
+                        input_df = input_df[features]
+                        pred = model.predict(input_df)[0]
+
+                        predicted_limit = pred
+                        st.info(f"Predicted Credit Limit for this applicant: **₹{predicted_limit:,.0f}**")
+                    except Exception as e:
+                        st.error(f"Prediction error: {e}")
             else:
-                st.success("Data passes all checks and is ready for ML training.")
-
-                # --- Step 2: Train Model ---
-                st.subheader("Step 2: Train Model")
-                selected_model = st.selectbox("Select Model:", ["Logistic Regression"])
-                if st.button("Train Model"):
-                    # Prepare features and target
-                    features = [
-                        "CODE_GENDER", "DAYS_BIRTH", "CNT_CHILDREN", "AMT_INCOME_TOTAL",
-                        "AMT_CREDIT", "AMT_ANNUITY", "AMT_GOODS_PRICE", "DAYS_EMPLOYED",
-                        "FLAG_OWN_CAR", "FLAG_OWN_REALTY", "NAME_HOUSING_TYPE", "ORGANIZATION_TYPE"
-                    ]
-                    X = pd_df[features].copy()
-                    y = pd_df["TARGET"].astype(int)
-
-                    # Fill missing values
-                    for col in X.select_dtypes(include=[np.number]).columns:
-                        X[col] = X[col].fillna(X[col].median())
-                    for col in X.select_dtypes(include='object').columns:
-                         X[col] = X[col].fillna(X[col].mode()[0])
-
-                    # Label encode categorical columns
-                    encoders = {}
-                    categorical_cols = ["CODE_GENDER", "FLAG_OWN_CAR", "FLAG_OWN_REALTY", "NAME_HOUSING_TYPE", "ORGANIZATION_TYPE"]
-                    for col in categorical_cols:
-                        le = LabelEncoder()
-                        X[col] = le.fit_transform(X[col].astype(str))
-                        encoders[col] = le
-
-                    X_train, X_test, y_train, y_test = train_test_split(X, y, stratify=y, test_size=0.2, random_state=42)
-
-                    model = LogisticRegression(max_iter=500)
-                    model.fit(X_train, y_train)
-                    y_pred = model.predict(X_test)
-                    acc = accuracy_score(y_test, y_pred)
-                    st.success(f"Model trained! Accuracy on test data: {acc:.3f}")
-
-                    cm = confusion_matrix(y_test, y_pred)
-                    st.write("Confusion Matrix:")
-                    st.dataframe(pd.DataFrame(cm, columns=['Pred 0', 'Pred 1'], index=['Actual 0', 'Actual 1']))
-                    st.write("Classification Report:")
-                    st.text(classification_report(y_test, y_pred, zero_division=0))
-
-                    st.write("Feature Importances (coefficients):")
-                    st.dataframe(pd.DataFrame({"Feature": features, "Importance": model.coef_[0]}).sort_values(by="Importance", ascending=False))
-
-                    # Step 3: Prediction Input
-                    st.subheader("Step 3: Predict Default Risk on New Applicant")
-
-                    user_input = {}
-
-                    # Categorical input with encoding
-                    for col in categorical_cols:
-                        options = list(encoders[col].classes_)
-                        user_val = st.selectbox(col, options)
-                        user_input[col] = encoders[col].transform([user_val])[0]
-
-                    # Numeric input with median defaults
-                    numeric_cols = list(X.select_dtypes(include=[np.number]).columns.difference(categorical_cols))
-                    for col in numeric_cols:
-                        median_val = float(X[col].median())
-                        user_input[col] = st.number_input(col, value=median_val)
-
-                    # Prediction button
-                    if st.button("Predict"):
-                        try:
-                            input_df = pd.DataFrame([user_input])
-                            prob = model.predict_proba(input_df)[0][1]
-                            pred = model.predict(input_df)
-                            
-                            st.info(f"Predicted probability of default: {prob:.2%}")
-                            st.write(f"Prediction: {'Default Risk' if pred == 1 else 'Low Risk'}")
-                        except Exception as e:
-                            st.error(f"Prediction error: {e}")
-
-
-   
+                st.info("Please train the model first.")
