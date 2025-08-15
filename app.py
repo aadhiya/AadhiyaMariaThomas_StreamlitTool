@@ -103,10 +103,16 @@ if show_profiling:
                             st.markdown("#### 🛠 Handle Missing Values")
 
                             # Let the user choose a column or "All numeric columns"
-                            target_col = st.selectbox(
-                                "Select a column to clean:",
-                                ["All numeric columns"] + list(df.columns)
+                            target_col = st.sidebar.multiselect(
+                            "Type to search and select column(s) to clean:",
+                            ["All numeric columns"] + list(df.columns),
+                            max_selections=2  # if you want single-select behavior
                             )
+                            if target_col:
+                                target_col = target_col[0]  # if you want just one column
+                            else:
+                                target_col = "All numeric columns"
+
 
                             method = st.radio(
                                 "Choose a method:",
@@ -145,17 +151,28 @@ if show_profiling:
                                             mode_val = df[target_col].drop_nulls().mode()[0]
                                             df = df.with_columns(pl.col(target_col).fill_null(mode_val))
 
-                                st.success("✅ Missing value handling applied!")
+                                st.success(" Missing value handling applied!")
                                 # Optionally show updated preview
                                 st.dataframe(df.head())
 
 # ===== Duplicate Handling =====
-            st.markdown("### 🌀 Remove Duplicates")
-            if st.button("Remove Duplicate Rows"):
-                before = df.height
-                df = df.unique()
-                after = df.height
-                st.success(f"✅ Removed {before - after} duplicate rows.")
+            st.markdown("###  Duplicate Records Check")
+
+            # Count duplicates
+            df_pandas = df.to_pandas()
+            duplicate_count = df_pandas.duplicated().sum()
+
+            st.write(f"**Found {duplicate_count} duplicate rows.**")
+
+            if duplicate_count > 0:
+                if st.button("Remove Duplicate Rows"):
+                    before_rows = df.height
+                    df = df.unique()
+                    after_rows = df.height
+                    removed_count = before_rows - after_rows
+                    st.success(f"Removed {removed_count} duplicates. New row count: {after_rows}")
+            else:
+                st.info("No duplicate rows found.")
 
 # Interactive Column Explorer
             if show_column_explorer:
