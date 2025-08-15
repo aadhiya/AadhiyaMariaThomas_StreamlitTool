@@ -55,3 +55,24 @@ Used this to support faster data processing and integration with polars or other
 
 Reference: https://arrow.apache.org/docs/python/
 
+## Data Profiling & Exploration Module 
+
+This module provides an interactive and comprehensive overview of any uploaded CSV dataset, including:
+
+**Descriptive statistics for numeric columns:**
+
+Calculates and displays mean, median, standard deviation, minimum, maximum, and missing value counts for all numeric features.
+
+**Distributions and counts for categorical data:**
+
+Provides value counts for each categorical column, allowing easy inspection of category frequencies with expandable views.
+
+**Missing values detection and summary:**
+
+Shows total missing/null counts per column in an easy-to-read table format for quick data quality assessment.
+
+**Interactive column-level exploration:**
+
+Enables users to select any column and explore its distribution visually – histograms for numeric columns and bar charts for categorical columns.
+
+All profiling features are toggled on-demand via the sidebar to keep the app interface clean and user-friendly.
