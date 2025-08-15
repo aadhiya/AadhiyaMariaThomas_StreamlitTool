@@ -286,35 +286,61 @@ if show_profiling:
 
         if 'df' in locals() or 'df' in globals():
             st.markdown("### Histogram of Numerical Features")
+            advanced_mode = st.checkbox("Advanced Mode: Compare Multiple Columns", value=False)
             # Find all numeric columns in the loaded dataframe
             numeric_cols = [col for col, dtype in zip(df.columns, df.dtypes) if dtype in numeric_polars_types]
             # Filter only truly numeric columns with some >1 unique values
             good_numeric_cols = [col for col in numeric_cols if df[col].drop_nulls().n_unique() > 2]
             st.write("Available for histogram:", good_numeric_cols)
-            if good_numeric_cols:
-                selected_hist_col = st.selectbox(
-                    "Select a numeric column to plot histogram:",
-                    good_numeric_cols,
-                    key="hist_col_select"
-                )
-                data_series = df[selected_hist_col].to_pandas().dropna()
-                if len(data_series) > 1:
-                    min_val, max_val = float(data_series.min()), float(data_series.max())
-                    range_slider = st.slider(
-                        f"Select range for {selected_hist_col}:",
-                        min_value=min_val, max_value=max_val, value=(min_val, max_val)
+            if not advanced_mode:
+        # ---- Single select
+                if good_numeric_cols:
+                    selected_hist_col = st.selectbox(
+                        "Select a numeric column to plot histogram:",
+                        good_numeric_cols,
+                        key="hist_col_select"
                     )
-                    # Filter by slider
-                    filtered_data = data_series[(data_series >= range_slider[0]) & (data_series <= range_slider[1])]
+                    data_series = df[selected_hist_col].to_pandas().dropna()
+                    if len(data_series) > 1:
+                        min_val, max_val = float(data_series.min()), float(data_series.max())
+                        range_slider = st.slider(
+                            f"Select range for {selected_hist_col}:",
+                            min_value=min_val, max_value=max_val, value=(min_val, max_val)
+                        )
+                        # Filter by slider
+                        filtered_data = data_series[(data_series >= range_slider[0]) & (data_series <= range_slider[1])]
+                        fig, ax = plt.subplots()
+                        ax.hist(filtered_data, bins=30, color="skyblue")
+                        ax.set_xlabel(selected_hist_col)
+                        ax.set_ylabel("Frequency")
+                        st.pyplot(fig)
+                    else:
+                        st.info("Selected column does not have sufficient unique values for histogram.")
+                else:
+                    st.info("No numeric columns found in your dataset for histogram plotting.")
+            else:
+                # ---- Advanced: multiselect and overlayed histograms ----
+                selected_cols = st.multiselect(
+                    "Select numeric columns for overlayed histograms:",
+                    good_numeric_cols,
+                    default=good_numeric_cols[:2] if len(good_numeric_cols) >= 2 else good_numeric_cols
+                )
+                if selected_cols:
                     fig, ax = plt.subplots()
-                    ax.hist(filtered_data, bins=30, color="skyblue")
-                    ax.set_xlabel(selected_hist_col)
+                    for col in selected_cols:
+                        data_series = df[col].to_pandas().dropna()
+                        ax.hist(
+                            data_series,
+                            bins=30,
+                            alpha=0.6,
+                            label=col
+                        )
+                    ax.set_xlabel("Value")
                     ax.set_ylabel("Frequency")
+                    ax.legend()
                     st.pyplot(fig)
                 else:
-                    st.info("Selected column does not have sufficient unique values for histogram.")
-            else:
-                st.info("No numeric columns found in your dataset for histogram plotting.")
+                    st.info("Please select at least one column for the advanced histogram view.")         
         else:
             st.info("Please upload a dataset first to see visualizations.")
 
