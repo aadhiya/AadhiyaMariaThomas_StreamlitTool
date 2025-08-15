@@ -555,19 +555,31 @@ if show_ml_demo:
                     st.subheader("Step 3: Predict Default Risk on New Applicant")
 
                     user_input = {}
+
+                    # Categorical input with encoding
                     for col in categorical_cols:
                         options = list(encoders[col].classes_)
                         user_val = st.selectbox(col, options)
                         user_input[col] = encoders[col].transform([user_val])[0]
-                    for col in X.select_dtypes(include=[np.number]).columns.drop(categorical_cols):
-                        user_input[col] = st.number_input(col, value=float(X[col].median()))
 
+                    # Numeric input with median defaults
+                    numeric_cols = list(X.select_dtypes(include=[np.number]).columns.difference(categorical_cols))
+                    for col in numeric_cols:
+                        median_val = float(X[col].median())
+                        user_input[col] = st.number_input(col, value=median_val)
+
+                    # Prediction button
                     if st.button("Predict"):
-                        input_df = pd.DataFrame([user_input])
-                        prob = model.predict_proba(input_df)[0][1]
-                        pred = model.predict(input_df)
-                        st.info(f"Predicted probability of default: {prob:.2%}")
-                        st.write(f"Prediction: {'Default Risk' if pred==1 else 'Low Risk'}")
+                        try:
+                            input_df = pd.DataFrame([user_input])
+                            prob = model.predict_proba(input_df)[0][1]
+                            pred = model.predict(input_df)
+                            
+                            st.info(f"Predicted probability of default: {prob:.2%}")
+                            st.write(f"Prediction: {'Default Risk' if pred == 1 else 'Low Risk'}")
+                        except Exception as e:
+                            st.error(f"Prediction error: {e}")
+
 
     elif ml_use_case == "Credit Limit Estimation (Regression)":
         # --- Step 1: Prepare Data & Check Cleanliness ---
@@ -655,18 +667,30 @@ if show_ml_demo:
                     st.subheader("Step 3: Predict Default Risk on New Applicant")
 
                     user_input = {}
+
+                    # Categorical input with encoding
                     for col in categorical_cols:
                         options = list(encoders[col].classes_)
                         user_val = st.selectbox(col, options)
                         user_input[col] = encoders[col].transform([user_val])[0]
-                    for col in X.select_dtypes(include=[np.number]).columns.drop(categorical_cols):
-                        user_input[col] = st.number_input(col, value=float(X[col].median()))
 
+                    # Numeric input with median defaults
+                    numeric_cols = list(X.select_dtypes(include=[np.number]).columns.difference(categorical_cols))
+                    for col in numeric_cols:
+                        median_val = float(X[col].median())
+                        user_input[col] = st.number_input(col, value=median_val)
+
+                    # Prediction button
                     if st.button("Predict"):
-                        input_df = pd.DataFrame([user_input])
-                        prob = model.predict_proba(input_df)[0][1]
-                        pred = model.predict(input_df)
-                        st.info(f"Predicted probability of default: {prob:.2%}")
-                        st.write(f"Prediction: {'Default Risk' if pred==1 else 'Low Risk'}")
+                        try:
+                            input_df = pd.DataFrame([user_input])
+                            prob = model.predict_proba(input_df)[0][1]
+                            pred = model.predict(input_df)
+                            
+                            st.info(f"Predicted probability of default: {prob:.2%}")
+                            st.write(f"Prediction: {'Default Risk' if pred == 1 else 'Low Risk'}")
+                        except Exception as e:
+                            st.error(f"Prediction error: {e}")
+
 
    
