@@ -14,6 +14,7 @@ from sklearn.preprocessing import LabelEncoder
 from sklearn.linear_model import LogisticRegression, LinearRegression
 from sklearn.metrics import accuracy_score, confusion_matrix, classification_report, mean_squared_error, r2_score
 
+port = int(os.environ.get("PORT", 8501))
 # ============================= PAGE CONFIG =============================
 st.set_page_config(
     page_title="Aadhiya Maria Thomas - Streamlit Data Tool",
