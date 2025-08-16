@@ -36,25 +36,36 @@ st.sidebar.header("📂 S3 Data")
 
 uploaded_file = st.sidebar.file_uploader("Upload CSV/Excel to S3", type=["csv", "xlsx"])
 if uploaded_file is not None:
-    s3 = boto3.client('s3')
+    st.info(f"Received uploaded file: name={uploaded_file.name}, size={uploaded_file.size} bytes")
     try:
-        s3.upload_fileobj(uploaded_file, bucket_name, uploaded_file.name)
-        st.success(f"File '{uploaded_file.name}' uploaded to S3 bucket '{bucket_name}'!")
+        st.write("Initializing boto3 client...")
+        s3 = boto3.client('s3')
+        st.write(f"Attempting upload to bucket: {bucket_name} as key: {uploaded_file.name}")
+        response = s3.upload_fileobj(uploaded_file, bucket_name, uploaded_file.name)
+        st.success(f"File '{uploaded_file.name}' uploaded to S3 bucket '{bucket_name}' successfully!")
     except Exception as e:
         st.error(f"Upload failed: {e}")
+        st.write("Exception details:", str(e))
 
-# Optional: List files in S3 for selection
+# Optional: List files in S3 for selection (add debug here as well)
 def list_s3_files(bucket):
-    s3 = boto3.client('s3')
-    response = s3.list_objects_v2(Bucket=bucket)
-    if 'Contents' in response:
-        return [obj['Key'] for obj in response['Contents']]
-    return []
+    try:
+        st.write("Listing files in S3 bucket:", bucket)
+        s3 = boto3.client('s3')
+        response = s3.list_objects_v2(Bucket=bucket)
+        st.write("S3 list_objects_v2 response:", response)
+        if 'Contents' in response:
+            return [obj['Key'] for obj in response['Contents']]
+        return []
+    except Exception as e:
+        st.error(f"Failed to list S3 files: {e}")
+        st.write("Exception details:", str(e))
+        return []
 
 s3_files = list_s3_files(bucket_name)
+st.write("Files found in bucket:", s3_files)
 selected_file = st.sidebar.selectbox("Choose S3 file to analyze", s3_files)
-
-
+st.write("Selected file for analysis:", selected_file)
 # Global Sidebar Toggles
 st.sidebar.markdown("---")
 show_profiling = st.sidebar.checkbox(" Show Data Profiling")
