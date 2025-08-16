@@ -31,12 +31,34 @@ Automated Data Profiling is provided via these integrations:
 
 •	Streamlit-Pandas-Profiling: Which provides Embedded profiling reports which are displayed directly in Streamlit, allowing interactive exploration without leaving the app.
 
-•	ydata-profiling (formerly pandas-profiling):
+And finally ydata-profiling (formerly pandas-profiling):
 •	Full exploratory profile reports for your dataset, produced instantly.
 •	Supports interactive sampling for large datasets (with toggles in the UI to profile up to 1,000 random rows for rapid diagnostics).
 •	You can select which columns are included in profiles for targeted analysis.
 
+Tip: Streamlit Community Cloud now supports only Python version 3.13. It has also removed the option to change to a lower version. The ydata profiling library is not supported by the Python 3.13 version, so I had to try different deployment platforms and hence used Render.com's free tier with S3 support.
 
+________________________________________
+
+## ML Model Use-Case
+
+Supported Machine Learning Use-Cases:
+
+**1.	Credit Default Prediction (Classification)**
+
+The Goal of this use case is to predict the likelihood that a loan/credit applicant will default, using demographic and financial features.
+•	Required Features: CODE_GENDER, DAYS_BIRTH, CNT_CHILDREN, AMT_INCOME_TOTAL, AMT_CREDIT, AMT_ANNUITY, AMT_GOODS_PRICE, DAYS_EMPLOYED, FLAG_OWN_CAR, FLAG_OWN_REALTY, NAME_HOUSING_TYPE, ORGANIZATION_TYPE, and the target column TARGET.
+•	Model Used: Logistic Regression (sklearn.linear_model.LogisticRegression)
+•	Pipeline: Data checks → cleaning/encoding → model training → evaluation (accuracy, confusion matrix, classification report) → prediction on new inputs.
+2.	Credit Limit Estimation (Regression)
+•	Goal: Predict the expected credit limit for new applicants.
+•	Required Features: AMT_CREDIT, AMT_INCOME_TOTAL, DAYS_BIRTH, CNT_CHILDREN, DAYS_EMPLOYED, NAME_HOUSING_TYPE, ORGANIZATION_TYPE, etc.
+•	Model Used: Linear Regression (sklearn.linear_model.LinearRegression)
+•	Pipeline: Data checks → cleaning/encoding → model training → evaluation (R² score, RMSE) → prediction for new applicants.
+Tips:
+•	All categorical features are automatically encoded using LabelEncoder.
+•	UI guided interactions help fix missing values, enforce data types, and prepare the dataset for ML.
+•	You can predict risk or limits for custom applicants via interactive forms.
 
 
 
