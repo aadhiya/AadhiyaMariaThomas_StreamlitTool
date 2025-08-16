@@ -79,109 +79,22 @@ show_profiling = st.sidebar.checkbox(" Show Data Profiling")
 # ============================= TABS =============================
 tab_viz, = st.tabs(["1️⃣ v"])
 with tab_viz:
-    # Use cleaned if exists, else the original
-    #df = st.session_state.get('cleaned_df') or st.session_state.get('df')
-    
-    # Sample for plotting, keeps memory use low
-    if df is not None and df.height > 1000:
-        df_plot = df.head(1000)
-    else:
-        df_plot = df
-    
-    if df_plot is None or df_plot.is_empty():
-        st.info("Upload or clean data to plot.")
-    else:
-        st.subheader("Visualizations")
-        viz_type = st.radio("Choose Visualization:", ["Histogram", "Bar Chart", "Correlation Heatmap"], horizontal=True)
-        st.write(f"Plotting sample of {df_plot.height} rows × {df_plot.width} columns.")
+    def read_s3_csv_chunk(bucket, key, nrows=1000):
+        s3 = boto3.client('s3')
+        obj = s3.get_object(Bucket=bucket, Key=key)
+        # Polars
+        try:
+            return pl.read_csv(obj['Body'], n_rows=nrows)
+        except:
+            # Fallback for Excel
+           
+            return pl.from_pandas(pd.read_excel(obj['Body']))
 
-        if viz_type == "Histogram":
-            advanced_mode = st.checkbox("Advanced Mode: Compare Multiple Columns", value=False)
-            numeric_cols = [col for col, dtype in zip(df_plot.columns, df_plot.dtypes) if dtype in numeric_polars_types]
-            good_numeric_cols = [col for col in numeric_cols if df_plot[col].drop_nulls().n_unique() > 2]
-            if not advanced_mode:
-                if good_numeric_cols:
-                    selected_hist_col = st.selectbox("Select a numeric column to plot histogram:", good_numeric_cols, key="hist_col_select")
-                    data_series = df_plot[selected_hist_col].to_pandas().dropna()
-                    if len(data_series) > 1:
-                        min_val, max_val = float(data_series.min()), float(data_series.max())
-                        range_slider = st.slider(
-                            f"Select range for {selected_hist_col}:",
-                            min_value=min_val,
-                            max_value=max_val,
-                            value=(min_val, max_val),
-                        )
-                        filtered_data = data_series[(data_series >= range_slider[0]) & (data_series <= range_slider[1])]
-                        fig, ax = plt.subplots()
-                        ax.hist(filtered_data, bins=30, color="skyblue")
-                        ax.set_xlabel(selected_hist_col)
-                        ax.set_ylabel("Frequency")
-                        st.pyplot(fig)
-                        del filtered_data, data_series, fig, ax  # memory safety
-                    else:
-                        st.info("Selected column does not have sufficient unique values for histogram.")
-                else:
-                    st.info("No suitable numeric columns found for histogram plotting.")
-            else:
-                selected_cols = st.multiselect(
-                    "Select numeric columns for side-by-side histograms:",
-                    good_numeric_cols,
-                    default=good_numeric_cols[:2] if len(good_numeric_cols) >= 2 else good_numeric_cols
-                )
-                if selected_cols:
-                    n_cols = len(selected_cols)
-                    fig, axes = plt.subplots(1, n_cols, figsize=(6 * n_cols, 4))
-                    if n_cols == 1:
-                        axes = [axes]
-                    for ax, col in zip(axes, selected_cols):
-                        data_series = df_plot[col].to_pandas().dropna()
-                        ax.hist(data_series, bins=30, color="skyblue", alpha=0.8)
-                        ax.set_title(f"Histogram of {col}")
-                        ax.set_xlabel(col)
-                        ax.set_ylabel("Frequency")
-                    plt.tight_layout()
-                    st.pyplot(fig)
-                    del data_series, fig, axes  # memory safety
-                else:
-                    st.info("Please select at least one column.")
-
-        elif viz_type == "Bar Chart":
-            categorical_cols = [col for col, dtype in zip(df_plot.columns, df_plot.dtypes) if dtype == pl.Utf8]
-            good_categorical_cols = [col for col in categorical_cols if df_plot[col].drop_nulls().n_unique() < 100]
-            if good_categorical_cols:
-                selected_cat_col = st.selectbox("Select a categorical column for bar chart:", good_categorical_cols, key="bar_cat_select")
-                vc_pd = df_plot.to_pandas()[selected_cat_col].value_counts().sort_values(ascending=False)
-                fig, ax = plt.subplots(figsize=(8,4))
-                ax.bar(vc_pd.index.astype(str), vc_pd.values, color="mediumpurple")
-                ax.set_xlabel(selected_cat_col)
-                ax.set_ylabel("Counts")
-                ax.set_title(f"Value Counts for {selected_cat_col}")
-                plt.xticks(rotation=45, ha='right')
-                st.pyplot(fig)
-                del vc_pd, fig, ax  # memory safety
-            else:
-                st.info("No suitable categorical columns found for bar charts.")
-
-        elif viz_type == "Correlation Heatmap":
-            numeric_cols = [col for col, dtype in zip(df_plot.columns, df_plot.dtypes) if dtype in numeric_polars_types]
-            if len(numeric_cols) >= 2:
-                selected_corr_cols = st.multiselect(
-                    "Select numeric columns for correlation matrix:",
-                    numeric_cols,
-                    default=numeric_cols[:5] if len(numeric_cols) >= 5 else numeric_cols
-                )
-                if len(selected_corr_cols) >= 2:
-                    corr_data = df_plot.select(selected_corr_cols).to_pandas().corr()
-                    fig, ax = plt.subplots(figsize=(1 + len(selected_corr_cols), 1 + len(selected_corr_cols)))
-                    sns.heatmap(corr_data, annot=True, cmap="YlGnBu", ax=ax)
-                    st.pyplot(fig)
-                    del corr_data, fig, ax  # memory safety
-                else:
-                    st.info("Select at least two columns for correlation heatmap.")
-            else:
-                st.info("Not enough numeric columns for correlation heatmap.")
-        
-        # Final cleanup after plotting
-        del df_plot
-        import gc
-        gc.collect()
+if selected_file:
+    df = read_s3_csv_chunk(bucket_name, selected_file, nrows=1000)  # Load 1,000 rows for preview
+    st.session_state['df'] = df
+    st.subheader(" Dataset Preview")
+    st.write(f"**Shape:** {df.height} rows × {df.width} columns")
+    st.dataframe(df.head(10), use_container_width=True)
+else:
+    st.info("Please upload or select a dataset from S3 to begin.")
