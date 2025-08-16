@@ -79,28 +79,34 @@ show_profiling = st.sidebar.checkbox(" Show Data Profiling")
 # ============================= TABS =============================
 tab_viz, = st.tabs(["1️⃣ v"])
 with tab_viz:
-    def read_s3_csv_sample(bucket, key, nrows=1):
+    def s3_select_csv_head(bucket, key, nrows=1):
         s3 = boto3.client('s3')
-        obj = s3.get_object(Bucket=bucket, Key=key)
-        try:
-            # Only one row for minimum test
-            df = pl.read_csv(obj['Body'], n_rows=nrows)
-            return df
-        except Exception as e:
-            try:
-                df = pl.from_pandas(pd.read_excel(obj['Body']))
-                return df.head(nrows)
-            except Exception as ex:
-                st.error(f"Error reading file from S3: {ex}")
-                return None
+        sql_exp = f"SELECT * FROM S3Object LIMIT {nrows}"
+        response = s3.select_object_content(
+            Bucket=bucket,
+            Key=key,
+            ExpressionType='SQL',
+            Expression=sql_exp,
+            InputSerialization={'CSV': {"FileHeaderInfo": "USE"}, "CompressionType": "NONE"},
+            OutputSerialization={'CSV': {}},
+        )
+    
+        rows = ''
+        for event in response['Payload']:
+            if 'Records' in event:
+                rows += event['Records']['Payload'].decode()
+        # Wrap in header for pandas
+        # If possible, you need the header or infer columns
+        df = pd.read_csv(io.StringIO(rows))
+        return df
 
+# Usage in Streamlit:
 if selected_file:
-    df_sample = read_s3_csv_sample(bucket_name, selected_file, nrows=1)
-    if df_sample is not None and not df_sample.is_empty():
-        st.write("First row from your S3 file:")
-        st.dataframe(df_sample.to_pandas())
-    else:
-        st.info("Unable to load even one row. Check file format and S3 credentials.")
+    try:
+        df_sample = s3_select_csv_head(bucket_name, selected_file, nrows=1)
+        st.write("First row from your S3 file (via S3 Select):")
+        st.dataframe(df_sample)
+    except Exception as e:
+        st.error(f"S3 Select failed: {e}")
 else:
     st.info("Please select a file from S3.")
-
