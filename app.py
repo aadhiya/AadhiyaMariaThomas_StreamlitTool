@@ -79,22 +79,28 @@ show_profiling = st.sidebar.checkbox(" Show Data Profiling")
 # ============================= TABS =============================
 tab_viz, = st.tabs(["1️⃣ v"])
 with tab_viz:
-    def read_s3_csv_chunk(bucket, key, nrows=1000):
-        s3 = boto3.client('s3')
-        obj = s3.get_object(Bucket=bucket, Key=key)
-        # Polars
+    def read_s3_csv_sample(bucket, key, nrows=1):
+    s3 = boto3.client('s3')
+    obj = s3.get_object(Bucket=bucket, Key=key)
+    try:
+        # Only one row for minimum test
+        df = pl.read_csv(obj['Body'], n_rows=nrows)
+        return df
+    except Exception as e:
         try:
-            return pl.read_csv(obj['Body'], n_rows=nrows)
-        except:
-            # Fallback for Excel
-           
-            return pl.from_pandas(pd.read_excel(obj['Body']))
+            df = pl.from_pandas(pd.read_excel(obj['Body']))
+            return df.head(nrows)
+        except Exception as ex:
+            st.error(f"Error reading file from S3: {ex}")
+            return None
 
 if selected_file:
-    df = read_s3_csv_chunk(bucket_name, selected_file, nrows=1000)  # Load 1,000 rows for preview
-    st.session_state['df'] = df
-    st.subheader(" Dataset Preview")
-    st.write(f"**Shape:** {df.height} rows × {df.width} columns")
-    st.dataframe(df.head(10), use_container_width=True)
+    df_sample = read_s3_csv_sample(bucket_name, selected_file, nrows=1)
+    if df_sample is not None and not df_sample.is_empty():
+        st.write("First row from your S3 file:")
+        st.dataframe(df_sample.to_pandas())
+    else:
+        st.info("Unable to load even one row. Check file format and S3 credentials.")
 else:
-    st.info("Please upload or select a dataset from S3 to begin.")
+    st.info("Please select a file from S3.")
+
