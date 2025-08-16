@@ -77,17 +77,7 @@ show_profiling = st.sidebar.checkbox(" Show Data Profiling")
 
 
 # ============================= TABS =============================
-tab_viz = st.tabs([
-    "1️⃣ v"
-    
-   
-])
-
-# ---------------- TAB 1: Upload ----------------
-
-
-
-# ---------------- TAB 5: Visualizations ----------------
+tab_viz, = st.tabs(["1️⃣ v"])
 with tab_viz:
     # Use cleaned if exists, else the original
     df = st.session_state.get('cleaned_df') or st.session_state.get('df')
