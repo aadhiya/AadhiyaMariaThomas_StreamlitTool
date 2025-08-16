@@ -30,44 +30,18 @@ numeric_polars_types = [
 ]
 
 # ============================= SIDEBAR =============================
-bucket_name = "aadhiya-streamlit-data"  # Your S3 bucket name
-file_key = "application_data_75_percent.csv" 
-
-st.sidebar.header("📂 S3 Data")
-
-uploaded_file = st.sidebar.file_uploader("Upload CSV/Excel to S3", type=["csv", "xlsx"])
+st.sidebar.header("📂 File Upload")
+uploaded_file = st.sidebar.file_uploader("Upload CSV or Excel", type=["csv", "xlsx"])
 if uploaded_file is not None:
-    st.info(f"Received uploaded file: name={uploaded_file.name}, size={uploaded_file.size} bytes")
     try:
-        st.write("Initializing boto3 client...")
-        s3 = boto3.client('s3')
-        st.write(f"Attempting upload to bucket: {bucket_name} as key: {uploaded_file.name}")
-        response = s3.upload_fileobj(uploaded_file, bucket_name, uploaded_file.name)
-        st.success(f"File '{uploaded_file.name}' uploaded to S3 bucket '{bucket_name}' successfully!")
+        if uploaded_file.name.endswith(".csv"):
+            new_df = pl.read_csv(uploaded_file, infer_schema_length=10000, ignore_errors=True)
+        else:
+            new_df = pl.from_pandas(pd.read_excel(uploaded_file))
+        st.session_state['df'] = new_df  # Save to session state
     except Exception as e:
-        st.error(f"Upload failed: {e}")
-        st.write("Exception details:", str(e))
+        st.warning(f"Failed to load file: {e}")
 
-# Optional: List files in S3 for selection (add debug here as well)
-def list_s3_files(bucket):
-    try:
-        # Remove these debug prints:
-        # st.write("Listing files in S3 bucket:", bucket)
-        s3 = boto3.client('s3')
-        response = s3.list_objects_v2(Bucket=bucket)
-        # Remove: st.write("S3 list_objects_v2 response:", response)
-        if 'Contents' in response:
-            return [obj['Key'] for obj in response['Contents']]
-        return []
-    except Exception as e:
-        st.error(f"Failed to list S3 files: {e}")
-        # Optionally keep this for troubleshooting, but remove in production:
-        # st.write("Exception details:", str(e))
-        return []
-
-s3_files = list_s3_files(bucket_name)
-# Remove: st.write("Files found in bucket:", s3_files)
-selected_file = st.sidebar.selectbox("Choose S3 file to analyze", s3_files)
 
 # Global Sidebar Toggles
 st.sidebar.markdown("---")
@@ -75,42 +49,604 @@ show_profiling = st.sidebar.checkbox(" Show Data Profiling")
 #show_ml_demo = st.sidebar.checkbox("🤖 Show ML Use Case Demo")
 
 
-def s3_select_csv_head(bucket, key, nrows=1):
-    s3 = boto3.client('s3')
-    sql_exp = f"SELECT * FROM S3Object LIMIT {nrows}"
-    response = s3.select_object_content(
-        Bucket=bucket,
-        Key=key,
-        ExpressionType='SQL',
-        Expression=sql_exp,
-        InputSerialization={'CSV': {"FileHeaderInfo": "USE"}, "CompressionType": "NONE"},
-        OutputSerialization={'CSV': {}},
-    )
-    rows = ""
-    for event in response['Payload']:
-        if 'Records' in event:
-            rows += event['Records']['Payload'].decode()
-    if len(rows.strip()) == 0:
-        return None
-    return pd.read_csv(io.StringIO(rows))
+
 
 # ============================= TABS =============================
-tab_viz, = st.tabs(["1️⃣ v"])
-with tab_viz:
-    st.subheader("Preview first row using AWS S3 Select")
+tab_upload, tab_clean, tab_profile, tab_ml, tab_viz = st.tabs([
+    "1️⃣ Upload & Preview",
+    "2️⃣ Data Cleaning",
+    "3️⃣ Data Profiling",
+    "4️⃣ Machine Learning",
+    "5️⃣ Visualizations"
+])
 
-    if selected_file and selected_file.lower().endswith('.csv'):
-        try:
-            df_sample = s3_select_csv_head(bucket_name, selected_file, nrows=1)
-            if df_sample is not None and not df_sample.empty:
-                st.write("First row from your S3 file (via S3 Select):")
-                st.dataframe(df_sample)
-            else:
-                st.warning("S3 Select query succeeded but no data was returned (empty row).")
-        except Exception as e:
-            st.error(f"S3 Select failed: {e}")
-            st.info("Check if your file is a plain CSV (not zipped or encrypted), and that your IAM role has S3 Select permissions.")
-    elif selected_file:
-        st.warning("S3 Select is only supported for plain CSV files.")
+# ---------------- TAB 1: Upload ----------------
+with tab_upload:
+    df = st.session_state.get('df')
+    st.subheader(" Dataset Preview")
+    if df is not None:
+        st.write(f"**Shape:** {df.height} rows × {df.width} columns")
+        st.dataframe(df.head(10), use_container_width=True)
     else:
-        st.info("Please select a file from S3.")
+        st.info("Please upload a dataset from the sidebar to begin.")
+
+
+# ---------------- TAB 2: Cleaning ----------------
+with tab_clean:
+    cleaned_df = st.session_state.get('df') 
+    
+    if cleaned_df is None or cleaned_df.is_empty():
+        st.info("Upload a dataset to start cleaning.")
+    else:
+        st.subheader(" Data Cleaning")
+        
+        # Missing Value Summary
+        st.markdown("### Missing Data Summary")
+        missing_counts = {col: int(df[col].null_count()) for col in df.columns}
+        st.table(missing_counts)
+
+        # Missing Value Handling
+        numeric_cols = [c for c, t in zip(df.columns, df.dtypes) if t in numeric_polars_types]
+        selected_cols = st.multiselect("Select column(s) to clean:", df.columns)
+        apply_all = st.checkbox("Apply to ALL numeric columns")
+
+        if apply_all:
+            selected_cols = numeric_cols
+
+        method = st.radio("Choose method:", ["Fill with Mean", "Fill with Median", "Fill with Mode", "Drop Rows", "Drop Columns"])
+        # Print columns before handling
+        st.write("Columns before cleaning:", df.columns)
+        cleaned_df = st.session_state.get('df')
+
+        if st.button("Apply Missing Value Handling"):
+            if not selected_cols:
+                st.warning("Select columns first.")
+            else:
+                actions = []
+                for c in selected_cols:
+                    if method == "Fill with Mean":
+                        cleaned_df = cleaned_df.with_columns(pl.col(c).fill_null(cleaned_df[c].mean()))
+                        actions.append(f"Filled missing values in column '{c}' with mean")
+                    elif method == "Fill with Median":
+                        cleaned_df = cleaned_df.with_columns(pl.col(c).fill_null(cleaned_df[c].median()))
+                        actions.append(f"Filled missing values in column '{c}' with median")
+                    elif method == "Fill with Mode":
+                        mode_val = cleaned_df[c].drop_nulls().mode()[0]
+                        cleaned_df = cleaned_df.with_columns(pl.col(c).fill_null(mode_val))
+                        actions.append(f"Filled missing values in column '{c}' with mode")
+                    elif method == "Drop Rows":
+                        before_rows = cleaned_df.height
+                        cleaned_df = cleaned_df.drop_nulls(subset=selected_cols)
+                        after_rows = cleaned_df.height
+                        actions.append(f"Dropped {before_rows - after_rows} rows with missing data in columns: {', '.join(selected_cols)}")
+                        break
+                    elif method == "Drop Columns":
+                        cleaned_df = cleaned_df.drop(selected_cols)
+                        actions.append(f"Dropped columns: {', '.join(selected_cols)}")
+                        break
+                st.write("Columns after cleaning:", cleaned_df.columns)
+                
+                # Update session state with fully cleaned dataframe
+                st.session_state['cleaned_df'] = cleaned_df
+
+                for action in actions:
+                    st.info(action)
+                # After applying missing value handling and showing action messages
+
+
+                
+                #missing_counts = {col: int(cleaned_df[col].null_count()) for col in cleaned_df.columns}
+                #st.table(missing_counts)
+        # Duplicate Removal
+        duplicates = df.to_pandas().duplicated().sum()
+        st.write(f"Found **{duplicates}** duplicate rows.")
+        if duplicates > 0 and st.button("Remove Duplicates"):
+            df = df.unique()
+            st.session_state['cleaned_df'] = df
+            st.success("Duplicates removed.")
+# Step 1: Prepare export toggle button
+        if st.button("Prepare Export of Cleaned Data"):
+            st.session_state['export_ready'] = True
+
+        # Step 2: If export is prepared, ask user if they want more changes
+        if st.session_state.get('export_ready', False):
+            more_changes = st.radio(
+                "Do you want to make more changes before exporting?",
+                options=["Yes", "No"],
+                index=0  # default to Yes (more changes)
+            )
+
+            if more_changes == "No":
+                # Show the download button
+                cleaned_df = st.session_state.get('cleaned_df') 
+                #if cleaned_df is not None:
+                csv_str = cleaned_df.to_pandas().to_csv(index=False)
+                csv_bytes = csv_str.encode('utf-8')
+                st.download_button(
+                    label=" Download Cleaned CSV",
+                    data=csv_bytes,
+                    file_name="cleaned_data.csv",
+                    mime="text/csv"
+                )
+                #if st.button("Done Exporting"):
+                    #st.session_state['export_ready'] = False  # Reset export state
+            else:
+                st.info("Please make any additional changes you want before exporting.")
+
+
+# ---------------- TAB 3: Profiling ----------------
+with tab_profile:
+    df = st.session_state.get('cleaned_df') or st.session_state.get('df')
+    if df is None or df.is_empty():
+        st.info("Upload to view profiling.")
+    elif not show_profiling:
+        st.info("Enable profiling from sidebar.")
+    else:
+        st.subheader("📈 Data Profiling Summary")
+        st.write(f"Profiling sample: {df.height} rows loaded from S3 (chunked)")
+        
+        # Numeric summary
+        num_cols = [c for c, t in zip(df.columns, df.dtypes) if t in numeric_polars_types]
+        if num_cols:
+            st.markdown("#### Numeric Summary")
+            stats_df = df.select(
+                [pl.col(c).mean().alias(f"{c}_mean") for c in num_cols] +
+                [pl.col(c).median().alias(f"{c}_median") for c in num_cols] +
+                [pl.col(c).std().alias(f"{c}_std") for c in num_cols]
+            ).to_pandas()
+            st.dataframe(stats_df)
+        else:
+            st.warning("No numeric columns found.")
+        
+        # Categorical summary
+        cat_cols = [c for c, t in zip(df.columns, df.dtypes) if t == pl.Utf8]
+        if cat_cols:
+            st.markdown("#### Categorical Summary")
+            for col in cat_cols:
+                counts = df.select(pl.col(col).value_counts().sort(descending=True)).to_pandas()
+                with st.expander(f"Value Counts: {col}"):
+                    st.dataframe(counts)
+        
+        # --- Automated ydata-profiling (with optimization) ---
+        st.markdown("---")
+        st.markdown("#### Automated Data Profile Report (ydata-profiling)")
+        pd_df = df.to_pandas()
+        row_count = len(pd_df)
+
+        # 1. Warning for large datasets and ask for sampling
+        max_sample = 1000
+        sample = False
+        if row_count > max_sample:
+            sample = st.checkbox(
+                f"⚡ Your dataset has {row_count} rows. Tick to profile a random sample of {max_sample} rows for speed.",
+                value=True
+            )
+        else:
+            sample = False
+
+        # 2. Column subset selector for profiling
+        st.markdown("Select columns to include in the full profile (optional):")
+        selected_columns = st.multiselect(
+            "Columns for ydata-profiling (default: all columns)",
+            list(pd_df.columns),
+            default=list(pd_df.columns)[:min(10, len(pd_df.columns))]
+        )
+
+        if st.button("Generate Full Profile Report"):
+            prof_df = pd_df
+            if sample:
+                prof_df = prof_df.sample(n=max_sample, random_state=42)
+                st.info(f"Profiling on a random sample of {max_sample} rows for faster results.")
+            if selected_columns:
+                prof_df = prof_df[selected_columns]
+            # Basic ProfileReport call
+            profile = ProfileReport(
+                prof_df,
+                title="Automated Data Profile",
+                explorative=True
+            )
+            st_profile_report(profile)
+
+            
+# ---------------- TAB 4:ML ----------------            
+with tab_ml:
+    df = st.session_state.get('cleaned_df') or st.session_state.get('df')
+    if df is None or df.is_empty():
+        st.info("Upload a dataset first.")
+        st.stop()
+
+    else:
+        # ML Use Case selector directly in main tab
+        ml_use_case = st.radio(
+            "Select a Machine Learning use case:",
+            [
+                "Credit Default Prediction",
+                "Credit Limit Estimation (Regression)"
+            ],
+            index=0,
+            horizontal=True
+        )
+
+        st.markdown("---")
+        st.header("Machine Learning Demo")
+        st.subheader(f"Selected Use Case: {ml_use_case}")
+
+        if ml_use_case == "Credit Default Prediction":
+            st.markdown("**Goal:** Predict the risk that an applicant will miss scheduled payments on their loan or credit obligation based on their demographic features (like gender, age, number of children), financial features (income, credit amount, annuity, goods price), employment duration, ownership flags, and housing and organization types.")
+            st.subheader("Step 1: Prepare Data Quality Check")
+            required_columns = [
+                "TARGET", "CODE_GENDER", "DAYS_BIRTH", "CNT_CHILDREN", "AMT_INCOME_TOTAL",
+                "AMT_CREDIT", "AMT_ANNUITY", "AMT_GOODS_PRICE", "DAYS_EMPLOYED",
+                "FLAG_OWN_CAR", "FLAG_OWN_REALTY", "NAME_HOUSING_TYPE", "ORGANIZATION_TYPE"
+            ]
+
+            missing_cols = [col for col in required_columns if col not in df.columns]
+            err_msgs = []
+
+            if missing_cols:
+                err_msgs.append(
+                    f"Missing required columns: {', '.join(missing_cols)}.\n"
+                    "Use 'Interactive Column Explorer' to check columns and 'Column Explanation' for details."
+                )
+            else:
+                pd_df = df.to_pandas()
+                missing_vals = pd_df[required_columns].isnull().sum()
+                num_missing = missing_vals[missing_vals > 0]
+
+                if not num_missing.empty:
+                    st.warning("The following features have missing values:")
+                    st.write(num_missing)
+                    st.markdown("""
+                        To fix missing **numeric** columns, use 'Missing Data Summary' and fill with **mean/median** (recommended).
+                        To fix missing **categorical** columns, fill with **mode** or drop rows/columns as needed using sidebar tools.
+                    """)
+
+                numeric_cols = [
+                    "DAYS_BIRTH", "CNT_CHILDREN", "AMT_INCOME_TOTAL",
+                    "AMT_CREDIT", "AMT_ANNUITY", "AMT_GOODS_PRICE", "DAYS_EMPLOYED"
+                ]
+                for col in numeric_cols:
+                    if not pd.api.types.is_numeric_dtype(pd_df[col]):
+                        err_msgs.append(
+                            f"Column '{col}' is not numeric. Use 'Interactive Column Explorer' and "
+                            "'Encode Categorical Feature(s)' or fix data type in sidebar."
+                        )
+
+                if pd_df["TARGET"].isnull().any():
+                    err_msgs.append("Target column `TARGET` has missing values. Use sidebar cleaning tools to drop or fill.")
+
+            if len(err_msgs) > 0 or (not missing_cols and not num_missing.empty):
+                st.error("Data is NOT ready for ML training.")
+                for msg in err_msgs:
+                    st.markdown(msg)
+                st.info("Please use the data cleaning options in the sidebar, then export and reload the cleaned data.")
+                st.stop()
+            else:
+                st.success("Data passes all checks and is ready for ML training.")
+
+                st.subheader("Step 2: Train Model")
+                selected_model = st.selectbox("Select Model:", ["Logistic Regression"])
+
+                categorical_cols = [
+                    "CODE_GENDER", "FLAG_OWN_CAR", "FLAG_OWN_REALTY",
+                    "NAME_HOUSING_TYPE", "ORGANIZATION_TYPE"
+                ]
+
+                if st.button("Train Model"):
+                    features = [
+                        "CODE_GENDER", "DAYS_BIRTH", "CNT_CHILDREN", "AMT_INCOME_TOTAL",
+                        "AMT_CREDIT", "AMT_ANNUITY", "AMT_GOODS_PRICE", "DAYS_EMPLOYED",
+                        "FLAG_OWN_CAR", "FLAG_OWN_REALTY", "NAME_HOUSING_TYPE", "ORGANIZATION_TYPE"
+                    ]
+                    st.session_state['features'] = features
+                    X = pd_df[features].copy()
+                    y = pd_df["TARGET"].astype(int)
+
+                    # Fill missing values
+                    for col in X.select_dtypes(include=[np.number]).columns:
+                        X[col] = X[col].fillna(X[col].median())
+                    for col in X.select_dtypes(include='object').columns:
+                        X[col] = X[col].fillna(X[col].mode()[0])
+
+                    encoders = {}
+                    for col in categorical_cols:
+                        le = LabelEncoder()
+                        X[col] = le.fit_transform(X[col].astype(str))
+                        encoders[col] = le
+
+                    X_train, X_test, y_train, y_test = train_test_split(
+                        X, y, stratify=y, test_size=0.2, random_state=42
+                    )
+
+                    model = LogisticRegression(max_iter=500)
+                    model.fit(X_train, y_train)
+                    y_pred = model.predict(X_test)
+                    acc = accuracy_score(y_test, y_pred)
+
+                    st.session_state['model'] = model
+                    st.session_state['encoders'] = encoders
+                    st.session_state['X'] = X
+
+                    st.success(f"Model trained! Accuracy on test data: {acc:.3f}")
+
+                    cm = confusion_matrix(y_test, y_pred)
+                    st.write("Confusion Matrix:")
+                    st.dataframe(pd.DataFrame(cm, columns=['Pred 0', 'Pred 1'], index=['Actual 0', 'Actual 1']))
+
+                    report_dict = classification_report(y_test, y_pred, output_dict=True, zero_division=0)
+                    report_df = pd.DataFrame(report_dict).transpose()
+                    report_df = report_df.round(2)
+                    st.markdown("#### Classification Report")
+                    st.dataframe(report_df, use_container_width=True)
+
+                    st.write("Feature Importances (coefficients):")
+                    st.dataframe(
+                        pd.DataFrame({"Feature": features, "Importance": model.coef_[0]})
+                        .sort_values(by="Importance", ascending=False)
+                    )
+
+                st.subheader("Step 3: Predict Default Risk on New Applicant")
+
+                model = st.session_state.get('model')
+                encoders = st.session_state.get('encoders')
+                X = st.session_state.get('X')
+
+                if model and encoders and X is not None:
+                    user_input = {}
+
+                    for col in categorical_cols:
+                        options = list(encoders[col].classes_)
+                        user_val = st.selectbox(col, options)
+                        user_input[col] = encoders[col].transform([user_val])[0]
+
+                    numeric_cols = list(X.select_dtypes(include=[np.number]).columns.difference(categorical_cols))
+                    for col in numeric_cols:
+                        median_val = float(X[col].median())
+                        user_input[col] = st.number_input(col, value=median_val)
+
+                    if st.button("Predict"):
+                        try:
+                            features = st.session_state.get('features')
+                            input_df = pd.DataFrame([user_input])
+                            input_df = input_df[features]
+                            prob = model.predict_proba(input_df)[0][1]
+                            pred = model.predict(input_df)
+                            st.info(f"Predicted probability of default: {prob:.2%}")
+                            st.write(f"Prediction: {'Default Risk' if pred == 1 else 'Low Risk'}")
+                        except Exception as e:
+                            st.error(f"Prediction error: {e}")
+                else:
+                    st.info("Please train the model first.")
+
+        elif ml_use_case == "Credit Limit Estimation (Regression)":
+            st.markdown("**Goal:** Predict the expected credit limit for an applicant using key profile features such as income, age, number of children, employment duration, housing status, and organization type")
+            st.subheader("Step 1: Prepare Data Quality Check")
+            required_columns = [
+                "AMT_CREDIT", "AMT_INCOME_TOTAL", "DAYS_BIRTH", "CNT_CHILDREN",
+                "DAYS_EMPLOYED", "NAME_HOUSING_TYPE", "ORGANIZATION_TYPE"
+            ]
+
+            missing_cols = [col for col in required_columns if col not in df.columns]
+            err_msgs = []
+
+            if missing_cols:
+                err_msgs.append(
+                    f"Missing required columns: {', '.join(missing_cols)}.\n"
+                    "Use 'Interactive Column Explorer' to check columns and 'Column Explanation' for details."
+                )
+            else:
+                pd_df = df.to_pandas()
+                missing_vals = pd_df[required_columns].isnull().sum()
+                num_missing = missing_vals[missing_vals > 0]
+
+                if not num_missing.empty:
+                    st.warning("The following features have missing values:")
+                    st.write(num_missing)
+                    st.markdown("""
+                        To fix missing **numeric** columns, use 'Missing Data Summary' and fill with **mean/median** (recommended).
+                        To fix missing **categorical** columns, fill with **mode** or drop rows/columns as needed using sidebar tools.
+                    """)
+
+                numeric_cols = [
+                    "AMT_CREDIT", "AMT_INCOME_TOTAL", "DAYS_BIRTH", "CNT_CHILDREN", "DAYS_EMPLOYED"
+                ]
+                for col in numeric_cols:
+                    if not pd.api.types.is_numeric_dtype(pd_df[col]):
+                        err_msgs.append(
+                            f"Column '{col}' is not numeric. Use 'Interactive Column Explorer' and "
+                            "'Encode Categorical Feature(s)' or fix data type in sidebar."
+                        )
+
+            if len(err_msgs) > 0 or (not missing_cols and not num_missing.empty):
+                st.error("Data is NOT ready for ML training.")
+                for msg in err_msgs:
+                    st.markdown(msg)
+                st.info("Please use the data cleaning options in the sidebar, then export and reload the cleaned data.")
+                st.stop()
+            else:
+                st.success("Data passes all checks and is ready for ML training.")
+
+                st.subheader("Step 2: Train Model")
+                selected_model = st.selectbox("Select Model:", ["Linear Regression"])
+
+                categorical_cols = [
+                    "CODE_GENDER", "FLAG_OWN_CAR", "FLAG_OWN_REALTY",
+                    "NAME_HOUSING_TYPE", "ORGANIZATION_TYPE"
+                ]
+
+                if st.button("Train Model"):
+                    features = [
+                        "CODE_GENDER", "DAYS_BIRTH", "CNT_CHILDREN", "AMT_INCOME_TOTAL",
+                        "AMT_ANNUITY", "AMT_GOODS_PRICE", "DAYS_EMPLOYED",
+                        "FLAG_OWN_CAR", "FLAG_OWN_REALTY", "NAME_HOUSING_TYPE", "ORGANIZATION_TYPE"
+                    ]
+
+                    X = pd_df[features].copy()
+                    y = pd_df["AMT_CREDIT"].astype(float)
+
+                    for col in X.select_dtypes(include=[np.number]).columns:
+                        X[col] = X[col].fillna(X[col].median())
+                    for col in X.select_dtypes(include='object').columns:
+                        X[col] = X[col].fillna(X[col].mode()[0])
+
+                    encoders = {}
+                    for col in categorical_cols:
+                        le = LabelEncoder()
+                        X[col] = le.fit_transform(X[col].astype(str))
+                        encoders[col] = le
+
+                    X_train, X_test, y_train, y_test = train_test_split(
+                        X, y, test_size=0.2, random_state=42
+                    )
+                    model = LinearRegression()
+                    model.fit(X_train, y_train)
+                    y_pred = model.predict(X_test)
+
+                    mse = mean_squared_error(y_test, y_pred)
+                    r2 = r2_score(y_test, y_pred)
+                    rmse = mse ** 0.5
+                    # Save to session state for later prediction
+                    st.session_state['model'] = model
+                    st.session_state['encoders'] = encoders
+                    st.session_state['X'] = X
+                    st.session_state['features'] = features
+                    st.success("Model trained successfully!")
+                    st.write(f"R² score (Goodness of fit): **{r2 * 100:.2f}%**")
+                    st.write(f"Root Mean Squared Error (RMSE): **₹{rmse:,.0f}** (average prediction error)")
+
+                st.subheader("Step 3: Predict Credit Limit for New Applicant")
+
+                model = st.session_state.get('model')
+                encoders = st.session_state.get('encoders')
+                X = st.session_state.get('X')
+
+                if model and encoders and X is not None:
+                    user_input = {}
+
+                    for col in categorical_cols:
+                        options = list(encoders[col].classes_)
+                        user_val = st.selectbox(col, options)
+                        user_input[col] = encoders[col].transform([user_val])[0]
+
+                    numeric_cols = list(X.select_dtypes(include=[np.number]).columns.difference(categorical_cols))
+                    for col in numeric_cols:
+                        median_val = float(X[col].median())
+                        user_input[col] = st.number_input(col, value=median_val)
+
+                    if st.button("Predict"):
+                        try:
+                            features = st.session_state.get('features')
+                            input_df = pd.DataFrame([user_input])
+                            input_df = input_df[features]
+                            pred = model.predict(input_df)[0]
+
+                            predicted_limit = pred
+                            st.info(f"Predicted Credit Limit for this applicant: **₹{predicted_limit:,.0f}**")
+                        except Exception as e:
+                            st.error(f"Prediction error: {e}")
+
+                else:
+                    st.info("Please train the model first.")
+
+
+# ---------------- TAB 5: Visualizations ----------------
+with tab_viz:
+    df = st.session_state.get('cleaned_df') or st.session_state.get('df')
+
+    if df is None:
+        st.info("Upload data to plot.")
+    else:
+        st.subheader("Visualizations")
+        viz_type = st.radio("Choose Visualization:", ["Histogram", "Bar Chart", "Correlation Heatmap"], horizontal=True)
+        st.write(f"Plotting on {df.height} rows × {df.width} columns loaded from S3.")
+
+        # ----------- Histogram (Single & Advanced) -----------
+        if viz_type == "Histogram":
+            advanced_mode = st.checkbox("Advanced Mode: Compare Multiple Columns", value=False)
+            numeric_cols = [col for col, dtype in zip(df.columns, df.dtypes) if dtype in numeric_polars_types]
+            good_numeric_cols = [col for col in numeric_cols if df[col].drop_nulls().n_unique() > 2]
+            if not advanced_mode:
+                if good_numeric_cols:
+                    selected_hist_col = st.selectbox(
+                        "Select a numeric column to plot histogram:",
+                        good_numeric_cols,
+                        key="hist_col_select"
+                    )
+                    data_series = df[selected_hist_col].to_pandas().dropna()
+                    if len(data_series) > 1:
+                        min_val, max_val = float(data_series.min()), float(data_series.max())
+                        range_slider = st.slider(
+                            f"Select range for {selected_hist_col}:",
+                            min_value=min_val,
+                            max_value=max_val,
+                            value=(min_val, max_val),
+                        )
+                        filtered_data = data_series[(data_series >= range_slider[0]) & (data_series <= range_slider[1])]
+                        fig, ax = plt.subplots()
+                        ax.hist(filtered_data, bins=30, color="skyblue")
+                        ax.set_xlabel(selected_hist_col)
+                        ax.set_ylabel("Frequency")
+                        st.pyplot(fig)
+                    else:
+                        st.info("Selected column does not have sufficient unique values for histogram.")
+                else:
+                    st.info("No suitable numeric columns found in your dataset for histogram plotting.")
+            else:
+                selected_cols = st.multiselect(
+                    "Select numeric columns for side-by-side histograms:",
+                    good_numeric_cols,
+                    default=good_numeric_cols[:2] if len(good_numeric_cols) >= 2 else good_numeric_cols
+                )
+                if selected_cols:
+                    n_cols = len(selected_cols)
+                    fig, axes = plt.subplots(1, n_cols, figsize=(6 * n_cols, 4))
+                    if n_cols == 1:
+                        axes = [axes]
+                    for ax, col in zip(axes, selected_cols):
+                        data_series = df[col].to_pandas().dropna()
+                        ax.hist(data_series, bins=30, color="skyblue", alpha=0.8)
+                        ax.set_title(f"Histogram of {col}")
+                        ax.set_xlabel(col)
+                        ax.set_ylabel("Frequency")
+                    plt.tight_layout()
+                    st.pyplot(fig)
+                else:
+                    st.info("Please select at least one column.")
+
+        elif viz_type == "Bar Chart":
+            categorical_cols = [col for col, dtype in zip(df.columns, df.dtypes) if dtype == pl.Utf8]
+            good_categorical_cols = [col for col in categorical_cols if df[col].drop_nulls().n_unique() < 100]
+            if good_categorical_cols:
+                selected_cat_col = st.selectbox(
+                    "Select a categorical column for bar chart:",
+                    good_categorical_cols,
+                    key="bar_cat_select"
+                )
+                vc_pd = df.to_pandas()[selected_cat_col].value_counts().sort_values(ascending=False)
+                fig, ax = plt.subplots(figsize=(8,4))
+                ax.bar(vc_pd.index.astype(str), vc_pd.values, color="mediumpurple")
+                ax.set_xlabel(selected_cat_col)
+                ax.set_ylabel("Counts")
+                ax.set_title(f"Value Counts for {selected_cat_col}")
+                plt.xticks(rotation=45, ha='right')
+                st.pyplot(fig)
+            else:
+                st.info("No suitable categorical columns found for bar charts.")
+
+        elif viz_type == "Correlation Heatmap":
+            numeric_cols = [col for col, dtype in zip(df.columns, df.dtypes) if dtype in numeric_polars_types]
+            if len(numeric_cols) >= 2:
+                selected_corr_cols = st.multiselect(
+                    "Select numeric columns for correlation matrix:",
+                    numeric_cols,
+                    default=numeric_cols[:5] if len(numeric_cols) >= 5 else numeric_cols
+                )
+                if len(selected_corr_cols) >= 2:
+                    corr_data = df.select(selected_corr_cols).to_pandas().corr()
+                    fig, ax = plt.subplots(figsize=(1 + len(selected_corr_cols), 1 + len(selected_corr_cols)))
+                    sns.heatmap(corr_data, annot=True, cmap="YlGnBu", ax=ax)
+                    st.pyplot(fig)
+                else:
+                    st.info("Select at least two columns for correlation heatmap.")
+            else:
+                st.info("Not enough numeric columns for correlation heatmap.")      
