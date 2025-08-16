@@ -80,19 +80,19 @@ show_profiling = st.sidebar.checkbox(" Show Data Profiling")
 tab_viz, = st.tabs(["1️⃣ v"])
 with tab_viz:
     def read_s3_csv_sample(bucket, key, nrows=1):
-    s3 = boto3.client('s3')
-    obj = s3.get_object(Bucket=bucket, Key=key)
-    try:
-        # Only one row for minimum test
-        df = pl.read_csv(obj['Body'], n_rows=nrows)
-        return df
-    except Exception as e:
+        s3 = boto3.client('s3')
+        obj = s3.get_object(Bucket=bucket, Key=key)
         try:
-            df = pl.from_pandas(pd.read_excel(obj['Body']))
-            return df.head(nrows)
-        except Exception as ex:
-            st.error(f"Error reading file from S3: {ex}")
-            return None
+            # Only one row for minimum test
+            df = pl.read_csv(obj['Body'], n_rows=nrows)
+            return df
+        except Exception as e:
+            try:
+                df = pl.from_pandas(pd.read_excel(obj['Body']))
+                return df.head(nrows)
+            except Exception as ex:
+                st.error(f"Error reading file from S3: {ex}")
+                return None
 
 if selected_file:
     df_sample = read_s3_csv_sample(bucket_name, selected_file, nrows=1)
