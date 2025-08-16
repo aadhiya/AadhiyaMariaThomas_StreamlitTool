@@ -575,11 +575,14 @@ with tab_ml:
 
 # ---------------- TAB 5: Visualizations ----------------
 with tab_viz:
+    df = st.session_state.get('cleaned_df') or st.session_state.get('df')
+
     if df is None:
         st.info("Upload data to plot.")
     else:
         st.subheader("Visualizations")
         viz_type = st.radio("Choose Visualization:", ["Histogram", "Bar Chart", "Correlation Heatmap"], horizontal=True)
+        st.write(f"Plotting on {df.height} rows × {df.width} columns loaded from S3.")
 
         # ----------- Histogram (Single & Advanced) -----------
         if viz_type == "Histogram":
