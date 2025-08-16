@@ -10,12 +10,32 @@ ________________________________________
 Polars and Pandas are both supported for tabular data processing:
 
  **Polars:** This is used as the default engine for data manipulation, preview, and cleaning. It offers significantly faster performance on large datasets, lower memory usage, and powerful lazy evaluation.
+ 
 •	Most internal operations (reading CSV/Excel, cleaning, etc.) route through Polars whenever possible.
+
 •	Automatic fallback to Pandas for unsupported formats or operations.
 
-**Pandas:** Used for interoperation with ML libraries (scikit-learn), visualization (matplotlib, seaborn), and profiling.
+**Pandas:** This is used for interoperation with ML libraries (scikit-learn), visualization (matplotlib, seaborn), and profiling.
+
 •	Conversion between Polars and Pandas is seamless.
-Tip: For best performance, keep work within Polars until ML/training/modeling steps.
+
+In this app for best performance, I have kept working within Polars until ML/training/modeling steps.
+
+________________________________________
+
+## Data Profiling Integration
+
+Automated Data Profiling is provided via these integrations:
+
+•	Custom Numeric/Categorical Summaries: With Fast, in-app previews using Polars for basic statistics (mean, median, std, value counts).
+
+•	Streamlit-Pandas-Profiling: Which provides Embedded profiling reports which are displayed directly in Streamlit, allowing interactive exploration without leaving the app.
+
+•	ydata-profiling (formerly pandas-profiling):
+•	Full exploratory profile reports for your dataset, produced instantly.
+•	Supports interactive sampling for large datasets (with toggles in the UI to profile up to 1,000 random rows for rapid diagnostics).
+•	You can select which columns are included in profiles for targeted analysis.
+
 
 
 
