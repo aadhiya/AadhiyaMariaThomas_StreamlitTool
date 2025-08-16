@@ -4,62 +4,13 @@ This Streamlit-based app provides a unified interface for uploading, cleaning, p
 
 It supports fast, interactive data science workflows with advanced handling for both small and large datasets.
 ________________________________________
+## Requirements
 
-## Stack Choices: Polars vs Pandas
+•	Python 3.8+
 
-Polars and Pandas are both supported for tabular data processing:
+•	streamlit, polars, pandas, boto3, ydata_profiling, scikit-learn, matplotlib, seaborn
 
- **Polars:** This is used as the default engine for data manipulation, preview, and cleaning. It offers significantly faster performance on large datasets, lower memory usage, and powerful lazy evaluation.
- 
-•	Most internal operations (reading CSV/Excel, cleaning, etc.) route through Polars whenever possible.
-
-•	Automatic fallback to Pandas for unsupported formats or operations.
-
-**Pandas:** This is used for interoperation with ML libraries (scikit-learn), visualization (matplotlib, seaborn), and profiling.
-
-•	Conversion between Polars and Pandas is seamless.
-
-In this app for best performance, I have kept working within Polars until ML/training/modeling steps.
-
-________________________________________
-
-## Data Profiling Integration
-
-Automated Data Profiling is provided via these integrations:
-
-•	Custom Numeric/Categorical Summaries: With Fast, in-app previews using Polars for basic statistics (mean, median, std, value counts).
-
-•	Streamlit-Pandas-Profiling: Which provides Embedded profiling reports which are displayed directly in Streamlit, allowing interactive exploration without leaving the app.
-
-And finally ydata-profiling (formerly pandas-profiling):
-•	Full exploratory profile reports for your dataset, produced instantly.
-•	Supports interactive sampling for large datasets (with toggles in the UI to profile up to 1,000 random rows for rapid diagnostics).
-•	You can select which columns are included in profiles for targeted analysis.
-
-Tip: Streamlit Community Cloud now supports only Python version 3.13. It has also removed the option to change to a lower version. The ydata profiling library is not supported by the Python 3.13 version, so I had to try different deployment platforms and hence used Render.com's free tier with S3 support.
-
-________________________________________
-
-## ML Model Use-Case
-
-Supported Machine Learning Use-Cases:
-
-**1.	Credit Default Prediction (Classification)**
-
-The Goal of this use case is to predict the likelihood that a loan/credit applicant will default, using demographic and financial features.
-•	Required Features: CODE_GENDER, DAYS_BIRTH, CNT_CHILDREN, AMT_INCOME_TOTAL, AMT_CREDIT, AMT_ANNUITY, AMT_GOODS_PRICE, DAYS_EMPLOYED, FLAG_OWN_CAR, FLAG_OWN_REALTY, NAME_HOUSING_TYPE, ORGANIZATION_TYPE, and the target column TARGET.
-•	Model Used: Logistic Regression (sklearn.linear_model.LogisticRegression)
-•	Pipeline: Data checks → cleaning/encoding → model training → evaluation (accuracy, confusion matrix, classification report) → prediction on new inputs.
-2.	Credit Limit Estimation (Regression)
-•	Goal: Predict the expected credit limit for new applicants.
-•	Required Features: AMT_CREDIT, AMT_INCOME_TOTAL, DAYS_BIRTH, CNT_CHILDREN, DAYS_EMPLOYED, NAME_HOUSING_TYPE, ORGANIZATION_TYPE, etc.
-•	Model Used: Linear Regression (sklearn.linear_model.LinearRegression)
-•	Pipeline: Data checks → cleaning/encoding → model training → evaluation (R² score, RMSE) → prediction for new applicants.
-Tips:
-•	All categorical features are automatically encoded using LabelEncoder.
-•	UI guided interactions help fix missing values, enforce data types, and prepare the dataset for ML.
-•	You can predict risk or limits for custom applicants via interactive forms.
-
+•	S3 bucket access (AWS credentials)
 
 
 ## Libraries used in this project  and their purpose
@@ -118,6 +69,75 @@ This provides fast data interchange and storage tools, useful for handling large
 Used this to support faster data processing and integration with polars or other backends.
 
 Reference: https://arrow.apache.org/docs/python/
+
+## Stack Choices: Polars vs Pandas
+
+Polars and Pandas are both supported for tabular data processing:
+
+ **Polars:** This is used as the default engine for data manipulation, preview, and cleaning. It offers significantly faster performance on large datasets, lower memory usage, and powerful lazy evaluation.
+ 
+•	Most internal operations (reading CSV/Excel, cleaning, etc.) route through Polars whenever possible.
+
+•	Automatic fallback to Pandas for unsupported formats or operations.
+
+**Pandas:** This is used for interoperation with ML libraries (scikit-learn), visualization (matplotlib, seaborn), and profiling.
+
+•	Conversion between Polars and Pandas is seamless.
+
+In this app for best performance, I have kept working within Polars until ML/training/modeling steps.
+
+________________________________________
+
+## Data Profiling Integration
+
+Automated Data Profiling is provided via these integrations:
+
+•	Custom Numeric/Categorical Summaries: With Fast, in-app previews using Polars for basic statistics (mean, median, std, value counts).
+
+•	Streamlit-Pandas-Profiling: Which provides Embedded profiling reports which are displayed directly in Streamlit, allowing interactive exploration without leaving the app.
+
+And finally ydata-profiling (formerly pandas-profiling):
+•	Full exploratory profile reports for your dataset, produced instantly.
+•	Supports interactive sampling for large datasets (with toggles in the UI to profile up to 1,000 random rows for rapid diagnostics).
+•	You can select which columns are included in profiles for targeted analysis.
+
+Tip: Streamlit Community Cloud now supports only Python version 3.13. It has also removed the option to change to a lower version. The ydata profiling library is not supported by the Python 3.13 version, so I had to try different deployment platforms and hence used Render.com's free tier with S3 support.
+
+________________________________________
+
+## ML Model Use-Case
+
+Supported Machine Learning Use-Cases:
+
+**1.	Credit Default Prediction (Classification)**
+
+The Goal of this use case is to predict the likelihood that a loan/credit applicant will default, using demographic and financial features.
+
+•	Required Features: CODE_GENDER, DAYS_BIRTH, CNT_CHILDREN, AMT_INCOME_TOTAL, AMT_CREDIT, AMT_ANNUITY, AMT_GOODS_PRICE, DAYS_EMPLOYED, FLAG_OWN_CAR, FLAG_OWN_REALTY, NAME_HOUSING_TYPE, ORGANIZATION_TYPE, and the target column TARGET.
+
+•	Model Used: Logistic Regression (sklearn.linear_model.LogisticRegression)
+
+•	Pipeline: Data checks → cleaning/encoding → model training → evaluation (accuracy, confusion matrix, classification report) → prediction on new inputs.
+
+**2.	Credit Limit Estimation (Regression)**
+
+The Goal of this use case is to predict the expected credit limit for new applicants.
+
+•	Required Features: AMT_CREDIT, AMT_INCOME_TOTAL, DAYS_BIRTH, CNT_CHILDREN, DAYS_EMPLOYED, NAME_HOUSING_TYPE, ORGANIZATION_TYPE, etc.
+
+•	Model Used: Linear Regression (sklearn.linear_model.LinearRegression)
+
+•	Pipeline: Data checks → cleaning/encoding → model training → evaluation (R² score, RMSE) → prediction for new applicants.
+
+Tips:
+
+•	All categorical features are automatically encoded using LabelEncoder.
+
+•	UI guided interactions help fix missing values, enforce data types, and prepare the dataset for ML.
+
+•	You can predict risk or limits for custom applicants via interactive forms.
+
+
 
 ## Data Profiling & Exploration Module 
 
