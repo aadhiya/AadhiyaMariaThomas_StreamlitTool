@@ -74,39 +74,42 @@ show_profiling = st.sidebar.checkbox(" Show Data Profiling")
 #show_ml_demo = st.sidebar.checkbox("🤖 Show ML Use Case Demo")
 
 
-
+def s3_select_csv_head(bucket, key, nrows=1):
+    s3 = boto3.client('s3')
+    sql_exp = f"SELECT * FROM S3Object LIMIT {nrows}"
+    response = s3.select_object_content(
+        Bucket=bucket,
+        Key=key,
+        ExpressionType='SQL',
+        Expression=sql_exp,
+        InputSerialization={'CSV': {"FileHeaderInfo": "USE"}, "CompressionType": "NONE"},
+        OutputSerialization={'CSV': {}},
+    )
+    rows = ""
+    for event in response['Payload']:
+        if 'Records' in event:
+            rows += event['Records']['Payload'].decode()
+    if len(rows.strip()) == 0:
+        return None
+    return pd.read_csv(io.StringIO(rows))
 
 # ============================= TABS =============================
 tab_viz, = st.tabs(["1️⃣ v"])
 with tab_viz:
-    def s3_select_csv_head(bucket, key, nrows=1):
-        s3 = boto3.client('s3')
-        sql_exp = f"SELECT * FROM S3Object LIMIT {nrows}"
-        response = s3.select_object_content(
-            Bucket=bucket,
-            Key=key,
-            ExpressionType='SQL',
-            Expression=sql_exp,
-            InputSerialization={'CSV': {"FileHeaderInfo": "USE"}, "CompressionType": "NONE"},
-            OutputSerialization={'CSV': {}},
-        )
-    
-        rows = ''
-        for event in response['Payload']:
-            if 'Records' in event:
-                rows += event['Records']['Payload'].decode()
-        # Wrap in header for pandas
-        # If possible, you need the header or infer columns
-        df = pd.read_csv(io.StringIO(rows))
-        return df
+    st.subheader("Preview first row using AWS S3 Select")
 
-# Usage in Streamlit:
-if selected_file:
-    try:
-        df_sample = s3_select_csv_head(bucket_name, selected_file, nrows=1)
-        st.write("First row from your S3 file (via S3 Select):")
-        st.dataframe(df_sample)
-    except Exception as e:
-        st.error(f"S3 Select failed: {e}")
-else:
-    st.info("Please select a file from S3.")
+    if selected_file and selected_file.lower().endswith('.csv'):
+        try:
+            df_sample = s3_select_csv_head(bucket_name, selected_file, nrows=1)
+            if df_sample is not None and not df_sample.empty:
+                st.write("First row from your S3 file (via S3 Select):")
+                st.dataframe(df_sample)
+            else:
+                st.warning("S3 Select query succeeded but no data was returned (empty row).")
+        except Exception as e:
+            st.error(f"S3 Select failed: {e}")
+            st.info("Check if your file is a plain CSV (not zipped or encrypted), and that your IAM role has S3 Select permissions.")
+    elif selected_file:
+        st.warning("S3 Select is only supported for plain CSV files.")
+    else:
+        st.info("Please select a file from S3.")
