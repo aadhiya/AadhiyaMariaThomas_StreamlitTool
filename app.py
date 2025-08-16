@@ -13,7 +13,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
 from sklearn.linear_model import LogisticRegression, LinearRegression
 from sklearn.metrics import accuracy_score, confusion_matrix, classification_report, mean_squared_error, r2_score
-
+import os
 port = int(os.environ.get("PORT", 8501))
 # ============================= PAGE CONFIG =============================
 st.set_page_config(
