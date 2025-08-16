@@ -31,6 +31,7 @@ numeric_polars_types = [
 
 # ============================= SIDEBAR =============================
 bucket_name = "aadhiya-streamlit-data"  # Your S3 bucket name
+file_key = "application_data_75_percent.csv" 
 
 st.sidebar.header("📂 S3 Data")
 
