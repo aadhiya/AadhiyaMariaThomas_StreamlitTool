@@ -14,7 +14,10 @@ from sklearn.preprocessing import LabelEncoder
 from sklearn.linear_model import LogisticRegression, LinearRegression
 from sklearn.metrics import accuracy_score, confusion_matrix, classification_report, mean_squared_error, r2_score
 import os
+<<<<<<< HEAD
 import boto3
+=======
+>>>>>>> d941ed3c8cf5219bfe6e41149b4c88b0f5c029e3
 port = int(os.environ.get("PORT", 8501))
 # ============================= PAGE CONFIG =============================
 st.set_page_config(
