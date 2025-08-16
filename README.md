@@ -1,3 +1,25 @@
+## Streamlit Data Tool:  For Cleansing, Profiling & ML train and predict by Aadhiya Thomas
+
+This Streamlit-based app provides a unified interface for uploading, cleaning, profiling, analyzing, and modeling tabular data from S3 using Streamlit.
+
+It supports fast, interactive data science workflows with advanced handling for both small and large datasets.
+________________________________________
+
+## Stack Choices: Polars vs Pandas
+
+Polars and Pandas are both supported for tabular data processing:
+
+ **Polars:** This is used as the default engine for data manipulation, preview, and cleaning. It offers significantly faster performance on large datasets, lower memory usage, and powerful lazy evaluation.
+•	Most internal operations (reading CSV/Excel, cleaning, etc.) route through Polars whenever possible.
+•	Automatic fallback to Pandas for unsupported formats or operations.
+
+**Pandas:** Used for interoperation with ML libraries (scikit-learn), visualization (matplotlib, seaborn), and profiling.
+•	Conversion between Polars and Pandas is seamless.
+Tip: For best performance, keep work within Polars until ML/training/modeling steps.
+
+
+
+
 ## Libraries used in this project  and their purpose
 **Streamlit**
 
