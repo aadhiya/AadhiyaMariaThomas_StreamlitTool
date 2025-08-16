@@ -80,7 +80,7 @@ show_profiling = st.sidebar.checkbox(" Show Data Profiling")
 tab_viz, = st.tabs(["1️⃣ v"])
 with tab_viz:
     # Use cleaned if exists, else the original
-    df = st.session_state.get('cleaned_df') or st.session_state.get('df')
+    #df = st.session_state.get('cleaned_df') or st.session_state.get('df')
     
     # Sample for plotting, keeps memory use low
     if df is not None and df.height > 1000:
