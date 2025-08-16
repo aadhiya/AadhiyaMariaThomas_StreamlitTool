@@ -14,10 +14,7 @@ from sklearn.preprocessing import LabelEncoder
 from sklearn.linear_model import LogisticRegression, LinearRegression
 from sklearn.metrics import accuracy_score, confusion_matrix, classification_report, mean_squared_error, r2_score
 import os
-<<<<<<< HEAD
 import boto3
-=======
->>>>>>> d941ed3c8cf5219bfe6e41149b4c88b0f5c029e3
 port = int(os.environ.get("PORT", 8501))
 # ============================= PAGE CONFIG =============================
 st.set_page_config(
@@ -210,6 +207,7 @@ with tab_profile:
         st.info("Enable profiling from sidebar.")
     else:
         st.subheader("📈 Data Profiling Summary")
+        st.write(f"Profiling sample: {df.height} rows loaded from S3 (chunked)")
         
         # Numeric summary
         num_cols = [c for c, t in zip(df.columns, df.dtypes) if t in numeric_polars_types]
@@ -276,8 +274,11 @@ with tab_profile:
             
 # ---------------- TAB 4:ML ----------------            
 with tab_ml:
-    if df is None:
+    df = st.session_state.get('cleaned_df') or st.session_state.get('df')
+    if df is None or df.is_empty():
         st.info("Upload a dataset first.")
+        st.stop()
+
     else:
         # ML Use Case selector directly in main tab
         ml_use_case = st.radio(
