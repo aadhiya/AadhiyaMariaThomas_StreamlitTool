@@ -13,7 +13,8 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
 from sklearn.linear_model import LogisticRegression, LinearRegression
 from sklearn.metrics import accuracy_score, confusion_matrix, classification_report, mean_squared_error, r2_score
-
+import os
+import boto3
 port = int(os.environ.get("PORT", 8501))
 # ============================= PAGE CONFIG =============================
 st.set_page_config(
@@ -29,17 +30,29 @@ numeric_polars_types = [
 ]
 
 # ============================= SIDEBAR =============================
-st.sidebar.header("📂 File Upload")
-uploaded_file = st.sidebar.file_uploader("Upload CSV or Excel", type=["csv", "xlsx"])
+bucket_name = "aadhiya-streamlit-data"  # Your S3 bucket name
+
+st.sidebar.header("📂 S3 Data")
+
+uploaded_file = st.sidebar.file_uploader("Upload CSV/Excel to S3", type=["csv", "xlsx"])
 if uploaded_file is not None:
+    s3 = boto3.client('s3')
     try:
-        if uploaded_file.name.endswith(".csv"):
-            new_df = pl.read_csv(uploaded_file, infer_schema_length=10000, ignore_errors=True)
-        else:
-            new_df = pl.from_pandas(pd.read_excel(uploaded_file))
-        st.session_state['df'] = new_df  # Save to session state
+        s3.upload_fileobj(uploaded_file, bucket_name, uploaded_file.name)
+        st.success(f"File '{uploaded_file.name}' uploaded to S3 bucket '{bucket_name}'!")
     except Exception as e:
-        st.warning(f"Failed to load file: {e}")
+        st.error(f"Upload failed: {e}")
+
+# Optional: List files in S3 for selection
+def list_s3_files(bucket):
+    s3 = boto3.client('s3')
+    response = s3.list_objects_v2(Bucket=bucket)
+    if 'Contents' in response:
+        return [obj['Key'] for obj in response['Contents']]
+    return []
+
+s3_files = list_s3_files(bucket_name)
+selected_file = st.sidebar.selectbox("Choose S3 file to analyze", s3_files)
 
 
 # Global Sidebar Toggles
@@ -61,13 +74,25 @@ tab_upload, tab_clean, tab_profile, tab_ml, tab_viz = st.tabs([
 
 # ---------------- TAB 1: Upload ----------------
 with tab_upload:
-    df = st.session_state.get('df')
+    def read_s3_csv_chunk(bucket, key, nrows=1000):
+        s3 = boto3.client('s3')
+        obj = s3.get_object(Bucket=bucket, Key=key)
+        # Polars
+        try:
+            return pl.read_csv(obj['Body'], n_rows=nrows)
+        except:
+            # Fallback for Excel
+           
+            return pl.from_pandas(pd.read_excel(obj['Body']))
+
+if selected_file:
+    df = read_s3_csv_chunk(bucket_name, selected_file, nrows=1000)  # Load 1,000 rows for preview
+    st.session_state['df'] = df
     st.subheader(" Dataset Preview")
-    if df is not None:
-        st.write(f"**Shape:** {df.height} rows × {df.width} columns")
-        st.dataframe(df.head(10), use_container_width=True)
-    else:
-        st.info("Please upload a dataset from the sidebar to begin.")
+    st.write(f"**Shape:** {df.height} rows × {df.width} columns")
+    st.dataframe(df.head(10), use_container_width=True)
+else:
+    st.info("Please upload or select a dataset from S3 to begin.")
 
 
 # ---------------- TAB 2: Cleaning ----------------
