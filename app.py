@@ -570,7 +570,7 @@ with tab_viz:
         if viz_type == "Histogram":
             advanced_mode = st.checkbox("Advanced Mode: Compare Multiple Columns", value=False)
             numeric_cols = [col for col, dtype in zip(df.columns, df.dtypes) if dtype in numeric_polars_types]
-            good_numeric_cols = [col for col in numeric_cols if viz_df[col].drop_nulls().n_unique() > 2]
+            good_numeric_cols = [col for col in numeric_cols if df[col].drop_nulls().n_unique() > 2]
             if not advanced_mode:
                 if good_numeric_cols:
                     selected_hist_col = st.selectbox(
