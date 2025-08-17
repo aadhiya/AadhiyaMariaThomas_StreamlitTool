@@ -1,6 +1,6 @@
 ## Streamlit Data Tool:  For Cleansing, Profiling & ML train and predict by Aadhiya Thomas
 
-This Streamlit-based app provides a unified interface for uploading, cleaning, profiling, analyzing, and modeling tabular data from S3 using Streamlit.
+This Streamlit-based app provides a unified interface for uploading, cleaning, profiling, analyzing, and modeling tabular data .
 
 It supports fast, interactive data science workflows with advanced handling for both small and large datasets.
 ________________________________________
@@ -102,6 +102,8 @@ And finally ydata-profiling (formerly pandas-profiling):
 •	You can select which columns are included in profiles for targeted analysis.
 
 Tip: Streamlit Community Cloud now supports only Python version 3.13. It has also removed the option to change to a lower version. The ydata profiling library is not supported by the Python 3.13 version, so I had to try different deployment platforms and hence used Render.com's free tier with S3 support.
+
+But I found a fix you have to delete the exisiting app from Streamlit community cloud and create that app again at that time in advance settings choose python version as 3.10 it will then change the default ,if you try without deleting even if you set the version as 3.10 it will take 3.13.
 
 ________________________________________
 
