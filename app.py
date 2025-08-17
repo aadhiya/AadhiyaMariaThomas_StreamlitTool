@@ -552,23 +552,30 @@ with tab_ml:
                 else:
                     st.info("Please train the model first.")
 
-
+raw_df = st.session_state.get('df', None)
+cleaned_df = st.session_state.get('cleaned_df', None)
+if cleaned_df is not None and not cleaned_df.is_empty():
+    viz_df = cleaned_df
+elif raw_df is not None and not raw_df.is_empty():
+    viz_df = raw_df
+else:
+    viz_df = None
 # ---------------- TAB 5: Visualizations ----------------
 with tab_viz:
-    df = st.session_state.get('cleaned_df') or st.session_state.get('df')
+   # df = st.session_state.get('cleaned_df') or st.session_state.get('df')
 
-    if df is None:
+    if viz_df is None:
         st.info("Upload data to plot.")
     else:
         st.subheader("Visualizations")
         viz_type = st.radio("Choose Visualization:", ["Histogram", "Bar Chart", "Correlation Heatmap"], horizontal=True)
-        st.write(f"Plotting on {df.height} rows × {df.width} columns loaded from S3.")
+        st.write(f"Plotting on {viz_df.height} rows × {viz_df.width} columns loaded from S3.")
 
         # ----------- Histogram (Single & Advanced) -----------
         if viz_type == "Histogram":
             advanced_mode = st.checkbox("Advanced Mode: Compare Multiple Columns", value=False)
-            numeric_cols = [col for col, dtype in zip(df.columns, df.dtypes) if dtype in numeric_polars_types]
-            good_numeric_cols = [col for col in numeric_cols if df[col].drop_nulls().n_unique() > 2]
+            numeric_cols = [col for col, dtype in zip(viz_df.columns, viz_df.dtypes) if dtype in numeric_polars_types]
+            good_numeric_cols = [col for col in numeric_cols if viz_df[col].drop_nulls().n_unique() > 2]
             if not advanced_mode:
                 if good_numeric_cols:
                     selected_hist_col = st.selectbox(
@@ -576,7 +583,7 @@ with tab_viz:
                         good_numeric_cols,
                         key="hist_col_select"
                     )
-                    data_series = df[selected_hist_col].to_pandas().dropna()
+                    data_series =viz_df[selected_hist_col].to_pandas().dropna()
                     if len(data_series) > 1:
                         min_val, max_val = float(data_series.min()), float(data_series.max())
                         range_slider = st.slider(
@@ -607,7 +614,7 @@ with tab_viz:
                     if n_cols == 1:
                         axes = [axes]
                     for ax, col in zip(axes, selected_cols):
-                        data_series = df[col].to_pandas().dropna()
+                        data_series = viz_df[col].to_pandas().dropna()
                         ax.hist(data_series, bins=30, color="skyblue", alpha=0.8)
                         ax.set_title(f"Histogram of {col}")
                         ax.set_xlabel(col)
@@ -618,15 +625,15 @@ with tab_viz:
                     st.info("Please select at least one column.")
 
         elif viz_type == "Bar Chart":
-            categorical_cols = [col for col, dtype in zip(df.columns, df.dtypes) if dtype == pl.Utf8]
-            good_categorical_cols = [col for col in categorical_cols if df[col].drop_nulls().n_unique() < 100]
+            categorical_cols = [col for col, dtype in zip(viz_df.columns, viz_df.dtypes) if dtype == pl.Utf8]
+            good_categorical_cols = [col for col in categorical_cols if viz_df[col].drop_nulls().n_unique() < 100]
             if good_categorical_cols:
                 selected_cat_col = st.selectbox(
                     "Select a categorical column for bar chart:",
                     good_categorical_cols,
                     key="bar_cat_select"
                 )
-                vc_pd = df.to_pandas()[selected_cat_col].value_counts().sort_values(ascending=False)
+                vc_pd = viz_df.to_pandas()[selected_cat_col].value_counts().sort_values(ascending=False)
                 fig, ax = plt.subplots(figsize=(8,4))
                 ax.bar(vc_pd.index.astype(str), vc_pd.values, color="mediumpurple")
                 ax.set_xlabel(selected_cat_col)
@@ -638,7 +645,7 @@ with tab_viz:
                 st.info("No suitable categorical columns found for bar charts.")
 
         elif viz_type == "Correlation Heatmap":
-            numeric_cols = [col for col, dtype in zip(df.columns, df.dtypes) if dtype in numeric_polars_types]
+            numeric_cols = [col for col, dtype in zip(viz_df.columns, viz_df.dtypes) if dtype in numeric_polars_types]
             if len(numeric_cols) >= 2:
                 selected_corr_cols = st.multiselect(
                     "Select numeric columns for correlation matrix:",
@@ -646,7 +653,7 @@ with tab_viz:
                     default=numeric_cols[:5] if len(numeric_cols) >= 5 else numeric_cols
                 )
                 if len(selected_corr_cols) >= 2:
-                    corr_data = df.select(selected_corr_cols).to_pandas().corr()
+                    corr_data =viz_df.select(selected_corr_cols).to_pandas().corr()
                     fig, ax = plt.subplots(figsize=(1 + len(selected_corr_cols), 1 + len(selected_corr_cols)))
                     sns.heatmap(corr_data, annot=True, cmap="YlGnBu", ax=ax)
                     st.pyplot(fig)
