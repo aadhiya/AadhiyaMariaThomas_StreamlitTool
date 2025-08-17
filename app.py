@@ -49,7 +49,7 @@ df = st.session_state.get('df', None)
 
 # Global Sidebar Toggles
 st.sidebar.markdown("---")
-show_profiling = st.sidebar.checkbox(" Show Data Profiling")
+#show_profiling = st.sidebar.checkbox(" Show Data Profiling")
 #show_ml_demo = st.sidebar.checkbox("🤖 Show ML Use Case Demo")
 
 
@@ -180,12 +180,20 @@ with tab_clean:
 
 # ---------------- TAB 3: Profiling ----------------
 with tab_profile:
-    df = st.session_state.get('cleaned_df') or st.session_state.get('df')
-    if df is None or df.is_empty():
-        st.info("Upload to view profiling.")
-    elif not show_profiling:
-        st.info("Enable profiling from sidebar.")
+    # Safely get dataframe from session_state
+    if 'cleaned_df' in st.session_state and st.session_state['cleaned_df'] is not None:
+        df = st.session_state['cleaned_df']
+    elif 'df' in st.session_state and st.session_state['df'] is not None:
+        df = st.session_state['df']
     else:
+        df = None
+
+    if df is None:
+        st.info("Upload or load data to begin profiling.")
+    else:
+        if hasattr(df, "is_empty") and df.is_empty():
+            st.info("Dataframe is empty, please upload or clean data.")
+
         st.subheader("📈 Data Profiling Summary")
         st.write(f"Profiling sample: {df.height} rows loaded from S3 (chunked)")
         
@@ -199,57 +207,44 @@ with tab_profile:
                 [pl.col(c).std().alias(f"{c}_std") for c in num_cols]
             ).to_pandas()
             st.dataframe(stats_df)
+>>>>>>> 6a2fc699b67adfaaf5c29fd0f337c02bc5f713b8
         else:
-            st.warning("No numeric columns found.")
-        
-        # Categorical summary
-        cat_cols = [c for c, t in zip(df.columns, df.dtypes) if t == pl.Utf8]
-        if cat_cols:
-            st.markdown("#### Categorical Summary")
-            for col in cat_cols:
-                counts = df.select(pl.col(col).value_counts().sort(descending=True)).to_pandas()
-                with st.expander(f"Value Counts: {col}"):
-                    st.dataframe(counts)
-        
-        # --- Automated ydata-profiling (with optimization) ---
-        st.markdown("---")
-        st.markdown("#### Automated Data Profile Report (ydata-profiling)")
-        pd_df = df.to_pandas()
-        row_count = len(pd_df)
+            # Sample for display
+            max_display_rows = 100
+            if df.height > max_display_rows:
+                st.warning(f"Showing a sample of {max_display_rows} rows out of {df.height} for display.")
+                df_display = df.sample(n=max_display_rows)
+            else:
+                df_display = df
 
-        # 1. Warning for large datasets and ask for sampling
-        max_sample = 1000
-        sample = False
-        if row_count > max_sample:
-            sample = st.checkbox(
-                f"⚡ Your dataset has {row_count} rows. Tick to profile a random sample of {max_sample} rows for speed.",
-                value=True
+            st.write("### Data Preview (sample):")
+            st.dataframe(df_display.to_pandas())
+
+            # Sample for profiling
+            max_profile_rows = 1000
+            prof_df = df
+            if df.height > max_profile_rows:
+                st.warning(f"Profiling a random sample of {max_profile_rows} rows for performance.")
+                prof_df = df.sample(n=max_profile_rows)
+            prof_df_pd = prof_df.to_pandas()
+
+            # Column selection defaults to first 10 or all if less
+            default_cols = list(prof_df_pd.columns)[:10] if len(prof_df_pd.columns) > 10 else list(prof_df_pd.columns)
+            selected_cols = st.multiselect(
+                "Choose columns to send to ydata-profiling (default: first 10):",
+                list(prof_df_pd.columns),
+                default=default_cols
             )
-        else:
-            sample = False
 
-        # 2. Column subset selector for profiling
-        st.markdown("Select columns to include in the full profile (optional):")
-        selected_columns = st.multiselect(
-            "Columns for ydata-profiling (default: all columns)",
-            list(pd_df.columns),
-            default=list(pd_df.columns)[:min(10, len(pd_df.columns))]
-        )
+            if st.button("Generate Profile Report"):
+                if not selected_cols:
+                    st.warning("Please select at least one column for profiling.")
+                else:
+                    profile_df = prof_df_pd[selected_cols]
+                    st.write("Running profiling...")
+                    profile = ProfileReport(profile_df, title="YData Profiling Report", explorative=True)
+                    st_profile_report(profile)
 
-        if st.button("Generate Full Profile Report"):
-            prof_df = pd_df
-            if sample:
-                prof_df = prof_df.sample(n=max_sample, random_state=42)
-                st.info(f"Profiling on a random sample of {max_sample} rows for faster results.")
-            if selected_columns:
-                prof_df = prof_df[selected_columns]
-            # Basic ProfileReport call
-            profile = ProfileReport(
-                prof_df,
-                title="Automated Data Profile",
-                explorative=True
-            )
-            st_profile_report(profile)
 
             
 # ---------------- TAB 4:ML ----------------            
@@ -555,10 +550,17 @@ with tab_ml:
 
 # ---------------- TAB 5: Visualizations ----------------
 with tab_viz:
+
+    #df = st.session_state.get('cleaned_df') or st.session_state.get('df')
+    # Safe check for Polars DataFrame emptiness
+    if df is None or (hasattr(df, "is_empty") and df.is_empty()):
+        st.info("Upload to view profiling.")
+
    # df = st.session_state.get('cleaned_df') or st.session_state.get('df')
 
     if df is None:
         st.info("Upload data to plot.")
+
     else:
         st.subheader("Visualizations")
         viz_type = st.radio("Choose Visualization:", ["Histogram", "Bar Chart", "Correlation Heatmap"], horizontal=True)
