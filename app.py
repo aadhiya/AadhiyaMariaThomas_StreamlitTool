@@ -249,7 +249,7 @@ with tab_profile:
             
 # ---------------- TAB 4:ML ----------------            
 with tab_ml:
-    df = st.session_state.get('cleaned_df') or st.session_state.get('df')
+    #df = st.session_state.get('cleaned_df') or st.session_state.get('df')
     if df is None or df.is_empty():
         st.info("Upload a dataset first.")
         st.stop()
