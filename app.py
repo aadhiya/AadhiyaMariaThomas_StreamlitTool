@@ -39,9 +39,13 @@ if uploaded_file is not None:
         else:
             new_df = pl.from_pandas(pd.read_excel(uploaded_file))
         st.session_state['df'] = new_df  # Save to session state
+        st.success(f"Loaded {uploaded_file.name}, shape: {new_df.shape if hasattr(new_df,'shape') else (new_df.height, new_df.width)}")
+        
     except Exception as e:
         st.warning(f"Failed to load file: {e}")
 
+# Always get latest dataframe from session state here:
+df = st.session_state.get('df', None)
 
 # Global Sidebar Toggles
 st.sidebar.markdown("---")
@@ -62,7 +66,7 @@ tab_upload, tab_clean, tab_profile, tab_ml, tab_viz = st.tabs([
 
 # ---------------- TAB 1: Upload ----------------
 with tab_upload:
-    df = st.session_state.get('df')
+   # df = st.session_state.get('df')
     st.subheader(" Dataset Preview")
     if df is not None:
         st.write(f"**Shape:** {df.height} rows × {df.width} columns")
