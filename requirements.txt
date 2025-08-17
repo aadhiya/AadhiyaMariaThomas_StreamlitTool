@@ -73,5 +73,5 @@ urllib3==2.5.0
 visions==0.8.1
 watchdog==6.0.0
 wordcloud==1.9.4
-ydata-profiling==4.16.1
+
 zipp==3.23.0
