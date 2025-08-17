@@ -180,6 +180,7 @@ with tab_clean:
 
 # ---------------- TAB 3: Profiling ----------------
 with tab_profile:
+    
     # Safely get dataframe from session_state
     if 'cleaned_df' in st.session_state and st.session_state['cleaned_df'] is not None:
         df = st.session_state['cleaned_df']
@@ -188,62 +189,35 @@ with tab_profile:
     else:
         df = None
 
-    if df is None:
+    if df is None or (hasattr(df, "is_empty") and df.is_empty()):
         st.info("Upload or load data to begin profiling.")
     else:
-        if hasattr(df, "is_empty") and df.is_empty():
-            st.info("Dataframe is empty, please upload or clean data.")
+        MAX_PROFILE_ROWS = 1000
 
-        st.subheader("📈 Data Profiling Summary")
-        st.write(f"Profiling sample: {df.height} rows loaded from S3 (chunked)")
-        
-        # Numeric summary
-        num_cols = [c for c, t in zip(df.columns, df.dtypes) if t in numeric_polars_types]
-        if num_cols:
-            st.markdown("#### Numeric Summary")
-            stats_df = df.select(
-                [pl.col(c).mean().alias(f"{c}_mean") for c in num_cols] +
-                [pl.col(c).median().alias(f"{c}_median") for c in num_cols] +
-                [pl.col(c).std().alias(f"{c}_std") for c in num_cols]
-            ).to_pandas()
-            st.dataframe(stats_df)
-
+        # Sample the dataset if it's large
+        if df.height > MAX_PROFILE_ROWS:
+            st.warning(f"Profiling uses a random sample of {MAX_PROFILE_ROWS} rows (of {df.height}) for performance.")
+            df_sample = df.sample(n=MAX_PROFILE_ROWS)
         else:
-            # Sample for display
-            max_display_rows = 100
-            if df.height > max_display_rows:
-                st.warning(f"Showing a sample of {max_display_rows} rows out of {df.height} for display.")
-                df_display = df.sample(n=max_display_rows)
+            df_sample = df
+
+        prof_df_pd = df_sample.to_pandas()
+        default_cols = list(prof_df_pd.columns)[:10] if len(prof_df_pd.columns) > 10 else list(prof_df_pd.columns)
+        selected_cols = st.multiselect(
+            "Choose columns to send to ydata-profiling (default: first 10):",
+            list(prof_df_pd.columns),
+            default=default_cols
+        )
+
+        if st.button("Generate Profile Report"):
+            if not selected_cols:
+                st.warning("Please select at least one column for profiling.")
             else:
-                df_display = df
+                profile_df = prof_df_pd[selected_cols]
+                st.write("Running profiling...")
+                profile = ProfileReport(profile_df, title="YData Profiling Report", explorative=True)
+                st_profile_report(profile)
 
-            st.write("### Data Preview (sample):")
-            st.dataframe(df_display.to_pandas())
-
-            # Sample for profiling
-            max_profile_rows = 1000
-            prof_df = df
-            if df.height > max_profile_rows:
-                st.warning(f"Profiling a random sample of {max_profile_rows} rows for performance.")
-                prof_df = df.sample(n=max_profile_rows)
-            prof_df_pd = prof_df.to_pandas()
-
-            # Column selection defaults to first 10 or all if less
-            default_cols = list(prof_df_pd.columns)[:10] if len(prof_df_pd.columns) > 10 else list(prof_df_pd.columns)
-            selected_cols = st.multiselect(
-                "Choose columns to send to ydata-profiling (default: first 10):",
-                list(prof_df_pd.columns),
-                default=default_cols
-            )
-
-            if st.button("Generate Profile Report"):
-                if not selected_cols:
-                    st.warning("Please select at least one column for profiling.")
-                else:
-                    profile_df = prof_df_pd[selected_cols]
-                    st.write("Running profiling...")
-                    profile = ProfileReport(profile_df, title="YData Profiling Report", explorative=True)
-                    st_profile_report(profile)
 
 
             
