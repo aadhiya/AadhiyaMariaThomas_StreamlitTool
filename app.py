@@ -207,7 +207,7 @@ with tab_profile:
                 [pl.col(c).std().alias(f"{c}_std") for c in num_cols]
             ).to_pandas()
             st.dataframe(stats_df)
->>>>>>> 6a2fc699b67adfaaf5c29fd0f337c02bc5f713b8
+
         else:
             # Sample for display
             max_display_rows = 100
